@@ -6,8 +6,8 @@
 
 ```powershell
 $T = "$env:USERPROFILE\Desktop\PowerManager\battery-charge"
-D:\miniforge3\python.exe "$T\battery_charge.py" --status  # 命令行查看当前状态
-D:\miniforge3\python.exe "$T\battery_charge.py" --boost 95 --hold-min 60 --max-hours 4
+python "$T\battery_charge.py" --status  # 命令行查看当前状态
+python "$T\battery_charge.py" --boost 95 --hold-min 60 --max-hours 4
 ```
 
 计划任务由项目根目录的 `install.ps1`（管理员）注册。
@@ -32,7 +32,7 @@ D:\miniforge3\python.exe "$T\battery_charge.py" --boost 95 --hold-min 60 --max-h
 
 ```powershell
 Get-ScheduledTask Battery-ChargeLimit | Select-Object TaskName, State
-D:\miniforge3\python.exe "$env:USERPROFILE\Desktop\PowerManager\battery-charge\battery_charge.py" --status
+python "$env:USERPROFILE\Desktop\PowerManager\battery-charge\battery_charge.py" --status
 ```
 
 输出中 `充电阈值` 为 `75%–80%`（或当前正在生效的临时冲高区间）。读数时间不再说明任务在不在跑：现在有事才读，几小时不读是正常的（插着电、电量不变时）。
@@ -61,7 +61,7 @@ MateBook 14 2024（`FlemingH`）的电池充电控制通过主板 ACPI WMI 设�
 
 不接入 `../charge_current_model/`（原在 `~\.gemini\antigravity\scratch\`）的自适应充电算法（2026-11-10 登记为待办，2026-11-11 结案，Claude 判断）：它每个周期算出一个充电电流（恒流、降流、恒压，带温度降额），这台机器的 WMI 只能设启充、停充百分比，没有设电流的接口，恒流恒压也已由电池包和充电芯片在硬件上做了；它的默认参数（单节 4.20 V、4.5 Ah）也不合这块 3 串、每串 4.48 V、约 70 Wh 的电池。能落到本机的“到某电量停、过热时停”，EC 阈值与 EC 自己的发热降档已经在做。
 
-策略（何时冲高、何时回落）是纯函数 `decide()`，测试在 `test_battery_charge.py`：在本目录跑 `D:\miniforge3\python.exe -m unittest test_battery_charge`。
+策略（何时冲高、何时回落）是纯函数 `decide()`，测试在 `test_battery_charge.py`：在本目录跑 `python -m unittest test_battery_charge`。
 
 ## 数据
 

@@ -12,10 +12,20 @@
 #   5. one shortcut PowerManager.lnk (desktop + Start menu) instead of Battery Charge.lnk and Power Mode.lnk;
 #      the Start menu one carries AppUserModelID "PowerManager" (without it toasts are not shown).
 # Keep this file ASCII (Windows PowerShell 5.1).
-param([switch]$Uninstall)
+param([switch]$Uninstall, [string]$Python = '')
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$py = 'D:\miniforge3\pythonw.exe'
+if (-not $Python) {
+    $cmd = Get-Command python.exe -ErrorAction SilentlyContinue
+    if ($cmd) { $Python = $cmd.Source }
+}
+if (-not $Python -or -not (Test-Path $Python)) {
+    Write-Output 'python.exe not found on PATH: pass -Python <path\to\python.exe>'
+    exit 1
+}
+$pyExe = (Resolve-Path $Python).Path
+$pywCandidate = Join-Path (Split-Path -Parent $pyExe) 'pythonw.exe'
+$py = if (Test-Path $pywCandidate) { $pywCandidate } else { $pyExe }
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not ([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Output 'not elevated: open Terminal (Admin) and run this again'
@@ -144,7 +154,7 @@ foreach ($dir in @($desktop, $startMenu)) {
     $l.Save()
 }
 # toasts from an unpackaged app are only displayed if a Start menu shortcut carries its AppUserModelID
-& 'D:\miniforge3\python.exe' (Join-Path $root 'common\shortcut.py') (Join-Path $startMenu 'PowerManager.lnk') 'PowerManager'
+& $pyExe (Join-Path $root 'common\shortcut.py') (Join-Path $startMenu 'PowerManager.lnk') 'PowerManager'
 Write-Output 'shortcuts PowerManager.lnk (desktop, Start menu)'
 
 Start-ScheduledTask -TaskName 'Battery-ChargeLimit'

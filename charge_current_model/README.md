@@ -21,6 +21,6 @@ Adaptive Li‑ion charge‑current algorithm (CC → taper → CV, temperature /
 
 ```powershell
 cd ..   # parent of charge_current_model
-D:\miniforge3\python.exe -m charge_current_model.demo
-D:\miniforge3\python.exe -m unittest discover -s charge_current_model/tests -t .
+python -m charge_current_model.demo
+python -m unittest discover -s charge_current_model/tests -t .
 ```

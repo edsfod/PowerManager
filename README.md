@@ -18,9 +18,9 @@
 让它睡了 2 分钟还醒着（后台忙，或在包里被唤醒后睡不下去），就休眠。后台忙时程序没法让它真睡，只能休眠（`REQUIREMENTS.md`“实测”）；这时想真睡，只能自己在开始菜单点“睡眠”。
 
 ```powershell
-D:\miniforge3\python.exe "$env:USERPROFILE\Desktop\PowerManager\agent\agent.py" --status              # 模式、设置、常驻在不在
-D:\miniforge3\python.exe "$env:USERPROFILE\Desktop\PowerManager\battery-charge\battery_charge.py" --status   # 充电
-D:\miniforge3\python.exe "$env:USERPROFILE\Desktop\PowerManager\agent\agent.py" --restore-original    # 停用，恢复 Windows 原设置
+python "$env:USERPROFILE\Desktop\PowerManager\agent\agent.py" --status              # 模式、设置、常驻在不在
+python "$env:USERPROFILE\Desktop\PowerManager\battery-charge\battery_charge.py" --status   # 充电
+python "$env:USERPROFILE\Desktop\PowerManager\agent\agent.py" --restore-original    # 停用，恢复 Windows 原设置
 ```
 
 ## 组成
@@ -35,16 +35,16 @@ D:\miniforge3\python.exe "$env:USERPROFILE\Desktop\PowerManager\agent\agent.py" 
 | 笔记 | `notes/`：电池 WMI 接口反编译、换电池后耗电快、醒来通知的流程与坑 | |
 | 自适应充电电流算法（不接入，理由在它的 `README.md`） | `charge_current_model/` | |
 
-依赖（`D:\miniforge3`，conda-forge）：`comtypes`（WMI、计划任务、快捷方式）、`pywebview`（界面，连带 `pythonnet`；用系统自带的 WebView2）。
+依赖（conda-forge 或 pip）：`comtypes`（WMI、计划任务、快捷方式）、`pywebview`（界面，连带 `pythonnet`；用系统自带的 WebView2）。
 
-安装：管理员 PowerShell 里 `powershell -ExecutionPolicy Bypass -File install.ps1`。它注册两个任务，删掉旧的 `PowerManager-ModeWatch`，登记通知发送者 `PowerManager`，建快捷方式并启动。
+安装：管理员 PowerShell 里 `powershell -ExecutionPolicy Bypass -File install.ps1`（默认用 `PATH` 上的 `python.exe`，也可用 `-Python <路径>` 指定）。它注册两个任务，删掉旧的 `PowerManager-ModeWatch`，登记通知发送者 `PowerManager`，建快捷方式并启动。
 
 ## 核实
 
 - `agent.py --status`：`running: True`，设置与上表一致。
 - 合盖 3 分钟再开盖、解锁：弹一条“睡了 X 分钟”之类的通知；`agent/var/agent.log` 有对应的 `wake:` 行。
 - 充电：见 `battery-charge/README.md`“核实”。
-- 测试：`agent/` 里 `D:\miniforge3\python.exe -m unittest test_brain`；`battery-charge/` 里 `D:\miniforge3\python.exe -m unittest test_battery_charge`。
+- 测试：`agent/` 里 `python -m unittest test_brain`；`battery-charge/` 里 `python -m unittest test_battery_charge`。
 
 ## 数据
 

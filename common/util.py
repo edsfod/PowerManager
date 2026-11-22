@@ -2,6 +2,7 @@
 import datetime as dt
 import json
 import os
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -15,7 +16,8 @@ AGENT_WINDOW_CLASS = 'PowerManagerAgent'
 AGENT_RELOAD_MSG = 'PowerManager.Reload'      # RegisterWindowMessage name, posted by the UI
 AUMID = 'PowerManager'                        # toast sender, registered by install.ps1
 ICON_PNG = ROOT / 'ui' / 'icon.png'
-PYTHONW = r'D:\miniforge3\pythonw.exe'
+_pythonw = Path(sys.executable).with_name('pythonw.exe')
+PYTHONW = str(_pythonw if _pythonw.exists() else Path(sys.executable))
 POWERSHELL = r'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
 NO_WINDOW = 0x08000000
 

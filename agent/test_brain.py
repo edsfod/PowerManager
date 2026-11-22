@@ -1,5 +1,5 @@
 """Tests for brain.Brain with a fake machine.  Run in this directory:
-    D:\\miniforge3\\python.exe -m unittest test_brain
+    python -m unittest test_brain
 """
 import datetime as dt
 import unittest

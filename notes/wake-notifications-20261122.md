@@ -49,5 +49,5 @@
 ## 怎么核对
 
 - 合盖 3 分钟再开盖、解锁：应弹一条通知；`agent/var/agent.log` 里有一行 `wake: …`，内容与通知相同。
-- 只想看通知发不发得出来：`D:\miniforge3\python.exe -c "from common import toast; toast.show('测试', ['一行', '两行'])"`（在项目根目录跑）。
+- 只想看通知发不发得出来：`python -c "from common import toast; toast.show('测试', ['一行', '两行'])"`（在项目根目录跑）。
 - 通知历史（Windows PowerShell 5.1）：`[Windows.UI.Notifications.ToastNotificationManager]::History.GetHistory('PowerManager').Count`。

@@ -1,6 +1,6 @@
 """Tests for the boost / revert policy of battery_charge.py (no EC access).
 
-Run: D:\\miniforge3\\python.exe -m unittest test_battery_charge  (from this directory)
+Run: python -m unittest test_battery_charge  (from this directory)
 """
 import datetime as dt
 import unittest
