@@ -10,7 +10,7 @@
 | 换电池后耗电快的排查 | `notes/drain-after-battery-swap-20261122.md` |
 | 睡眠、关机、电源模式的需求与实测 | `REQUIREMENTS.md` |
 | 重写的设计（事件驱动，待写代码） | `DESIGN.md` |
-| 自适应充电电流算法（Antigravity 写的，没接入，理由在 `battery-charge/README.md`“原理”） | `battery_charger/` |
+| 自适应充电电流算法（Antigravity 写的，没接入，理由在 `battery-charge/README.md`“原理”） | `charge_current_model/` |
 | 用户的待办 | `PR.md` |
 
 来历：`battery-charge/` 与反编译笔记 2026-11-22 从 Config（`topics/machine/windows/`）移出，之前的历史在 Config 的 git 里（`09bfa6e` 及以前）。Config 那边只留“电池充电上限”这条规定与它的状态检查（读 `battery-charge/var/state.json`）。
