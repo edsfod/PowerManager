@@ -35,7 +35,7 @@ Get-ScheduledTask Battery-ChargeLimit | Select-Object TaskName, State
 D:\miniforge3\python.exe "$env:USERPROFILE\Desktop\PowerManager\battery-charge\battery_charge.py" --status
 ```
 
-输出中 `充电阈值` 为 `75%–80%`（或当前正在生效的临时冲高区间）。读数时间不再说明任务在不在跑：现在有事才读，几小时不读是正常的（插着电、电量不变时）。Config 的 `cfg.py state windows`“电池充电上限”还要求读数在 15 分钟以内，改为事件驱动后会误报。
+输出中 `充电阈值` 为 `75%–80%`（或当前正在生效的临时冲高区间）。读数时间不再说明任务在不在跑：现在有事才读，几小时不读是正常的（插着电、电量不变时）。
 
 是否真的生效看电池的实际行为，不看指令返回值：插着电到 80% 时 `var/history.log` 里 `chg_mW` 归零、`cap_mWh` 不再上涨。
 

@@ -60,8 +60,7 @@ D:\miniforge3\python.exe "$env:USERPROFILE\Desktop\PowerManager\agent\agent.py" 
 ## 被别的程序按路径读的
 
 - 计划任务 `PowerManager-Agent` 读 `agent/agent.py`；`Battery-ChargeLimit` 读 `battery-charge/battery_charge.py`；两个 `PowerManager.lnk` 读 `ui/ui.py`、`ui/icon.ico`；注册表 `HKCU\Software\Classes\AppUserModelId\PowerManager` 读 `ui/icon.png`。挪动这些路径后重跑 `install.ps1`。
-- Config 的 `topics/machine/windows/tools/state.ps1`、`probe.ps1` 读 `battery-charge/var/state.json`。
 
 ## 来历
 
-`battery-charge/` 与电池接口反编译笔记 2026-11-22 从 Config（`topics/machine/windows/`）移出，之前的历史在 Config 的 git 里（`09bfa6e` 及以前）。同日重写为事件驱动：旧的 `power-mode/`（每 30 秒检查一次）与 `battery-charge` 每 5 分钟一次的定时触发都已去掉，见 `DESIGN.md`。
+`battery-charge/` 与电池接口反编译笔记 2026-11-22 从 Config（`topics/machine/windows/`）移出，之前的历史在 Config 的 git 里（`09bfa6e` 及以前）；Config 那边的规定与状态检查同日删去，两个项目不再互相读。同日重写为事件驱动：旧的 `power-mode/`（每 30 秒检查一次）与 `battery-charge` 每 5 分钟一次的定时触发都已去掉，见 `DESIGN.md`。
