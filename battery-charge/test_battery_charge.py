@@ -60,14 +60,21 @@ class Policy(unittest.TestCase):
         self.assertEqual(target, (75, 80))
         self.assertIn('Unplugged', event)
 
-    def test_unplug_before_target_needs_two_checks(self):
+    def test_unplug_before_target_needs_ten_minutes(self):
         boost, _, _ = bc.decide(None, REQ, T0, True, 60)
         boost, target, _ = bc.decide(boost, None, at(5), False, 60)
         self.assertEqual(target, (90, 95))
-        boost, target, _ = bc.decide(boost, None, at(10), True, 60)   # plugged back: counter resets
+        boost, target, _ = bc.decide(boost, None, at(10), True, 60)   # plugged back: timer resets
         boost, target, _ = bc.decide(boost, None, at(15), False, 60)
+        boost, target, _ = bc.decide(boost, None, at(24), False, 59)  # 9 minutes
         self.assertEqual(target, (90, 95))
-        boost, target, _ = bc.decide(boost, None, at(20), False, 59)
+        boost, target, event = bc.decide(boost, None, at(25), False, 59)
+        self.assertEqual(target, (75, 80))
+        self.assertIn('10 minutes', event)
+
+    def test_boost_started_on_battery_counts_from_start(self):
+        boost, _, _ = bc.decide(None, REQ, T0, False, 60)
+        boost, target, _ = bc.decide(boost, None, at(10), False, 58)
         self.assertEqual(target, (75, 80))
 
     def test_deadline_reverts(self):
