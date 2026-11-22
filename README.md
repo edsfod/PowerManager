@@ -6,8 +6,10 @@
 |---|---|
 | 充电上限 75%–80% 与临时冲高（计划任务 `Battery-ChargeLimit`、桌面与开始菜单 `Battery Charge.lnk`） | `battery-charge/`，用法与核实见它的 `README.md` |
 | 普通 / 保持运行（跑实验、通勤）两种电源模式（`Power Mode.lnk`、计划任务 `PowerManager-ModeWatch`） | `power-mode/`，见它的 `README.md` |
-| 电池充电 WMI 接口的反编译与实测 | `notes/电池充电接口反编译-20261111.md` |
-| 换电池后耗电快的排查 | `notes/换电池后耗电-20261122.md` |
+| 电池充电 WMI 接口的反编译与实测 | `notes/battery-wmi-decompile-20261111.md` |
+| 换电池后耗电快的排查 | `notes/drain-after-battery-swap-20261122.md` |
+| 睡眠、关机、电源模式的需求与实测 | `REQUIREMENTS.md` |
+| 重写的设计（事件驱动，待写代码） | `DESIGN.md` |
 | 自适应充电电流算法（Antigravity 写的，没接入，理由在 `battery-charge/README.md`“原理”） | `battery_charger/` |
 | 用户的待办 | `PR.md` |
 

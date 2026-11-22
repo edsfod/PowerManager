@@ -43,7 +43,7 @@ D:\miniforge3\python.exe "$env:USERPROFILE\Desktop\PowerManager\battery-charge\b
 
 ## 原理
 
-MateBook 14 2024（`FlemingH`）的电池充电控制通过主板 ACPI WMI 设备（`PNP0C14`，`root\wmi` 命名空间的 `OemWMIMethod.OemWMIfun`，输入 64 字节 `u8Input`）与主板 EC 通信。反编译、实测与电脑管家的用法记录在 `../notes/电池充电接口反编译-20261111.md`，结论：
+MateBook 14 2024（`FlemingH`）的电池充电控制通过主板 ACPI WMI 设备（`PNP0C14`，`root\wmi` 命名空间的 `OemWMIMethod.OemWMIfun`，输入 64 字节 `u8Input`）与主板 EC 通信。反编译、实测与电脑管家的用法记录在 `../notes/battery-wmi-decompile-20261111.md`，结论：
 
 | 输入 | 是什么 | 本工具 |
 |---|---|---|

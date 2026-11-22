@@ -7,7 +7,7 @@ Daily baseline (75%-80%) is hardcoded; the UI / CLI can only start a temporary b
   3. `max_total_hours` (default 4) passed since the boost started.
 
 EC interface (root\\wmi OemWMIMethod.OemWMIfun, admin only), see
-../notes/电池充电接口反编译-20261111.md:
+../notes/battery-wmi-decompile-20261111.md:
   - writes: only 03 10 (SBTT, charge start/stop %, EC 0x0268);
   - reads:  03 11 (GBTT), 03 16 (charge mode), 03 13 (resume-charging flag),
             02 0D 00 (charger charge current), 02 05 00 (system power),
