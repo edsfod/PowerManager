@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <!-- App Squircle Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B1120"/>
+      <stop offset="50%" stop-color="#152238"/>
+      <stop offset="100%" stop-color="#0D2E2A"/>
+    </linearGradient>
+
+    <!-- Subtle inner border glow -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.55"/>
+      <stop offset="50%" stop-color="#34D399" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#10B981" stop-opacity="0.45"/>
+    </linearGradient>
+
+    <!-- Battery Metallic Rim Gradient -->
+    <linearGradient id="shellGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F8FAFC"/>
+      <stop offset="50%" stop-color="#94A3B8"/>
+      <stop offset="100%" stop-color="#CBD5E1"/>
+    </linearGradient>
+
+    <!-- 80% Emerald Fill Gradient -->
+    <linearGradient id="chargeFill" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#047857"/>
+      <stop offset="55%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+
+    <!-- Top 20% Boost Headroom Zone Gradient -->
+    <linearGradient id="boostZone" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#38BDF8" stop-opacity="0.38"/>
+    </linearGradient>
+
+    <!-- Lightning / Boost Bolt Gradient -->
+    <linearGradient id="boltGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A"/>
+      <stop offset="45%" stop-color="#FACC15"/>
+      <stop offset="100%" stop-color="#F97316"/>
+    </linearGradient>
+
+    <!-- Badge Gradient -->
+    <linearGradient id="badgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284C7"/>
+      <stop offset="100%" stop-color="#0369A1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 1. Rounded Squircle App Tile -->
+  <rect x="12" y="12" width="232" height="232" rx="54" ry="54" fill="url(#bgGrad)"/>
+  <rect x="14" y="14" width="228" height="228" rx="52" ry="52" fill="none" stroke="url(#borderGrad)" stroke-width="3.5"/>
+
+  <!-- 2. Ambient Background Glow behind Battery -->
+  <circle cx="122" cy="138" r="82" fill="#10B981" opacity="0.12"/>
+  <circle cx="122" cy="96" r="56" fill="#38BDF8" opacity="0.10"/>
+
+  <!-- 3. Battery Positive Terminal (Cap) Shadow & Body -->
+  <rect x="96" y="34" width="52" height="16" rx="6" ry="6" fill="#000000" opacity="0.45"/>
+  <rect x="96" y="31" width="52" height="15" rx="6" ry="6" fill="url(#shellGrad)"/>
+
+  <!-- 4. Battery Outer Body Shadow & Frame -->
+  <rect x="58" y="54" width="128" height="170" rx="24" ry="24" fill="#000000" opacity="0.5"/>
+  <rect x="58" y="49" width="128" height="170" rx="24" ry="24" fill="#09101D" stroke="url(#shellGrad)" stroke-width="6.5"/>
+
+  <!-- 5. Top 20% Boost Reserve Area (80% -> 100%) -->
+  <path d="M 68 69 Q 68 59 78 59 L 166 59 Q 176 59 176 69 L 176 92 L 68 92 Z" fill="url(#boostZone)"/>
+
+  <!-- 6. 80% Daily Protection Fill (Bottom 80% of inner cavity) -->
+  <path d="M 68 96 L 176 96 L 176 199 Q 176 209 166 209 L 78 209 Q 68 209 68 199 Z" fill="url(#chargeFill)"/>
+
+  <!-- Subtle glass highlight on left side of battery -->
+  <rect x="74" y="63" width="11" height="140" rx="5.5" fill="#FFFFFF" opacity="0.18"/>
+
+  <!-- 7. Crisp 80% Threshold Guard Line (Glowing Cyan-Amber) -->
+  <line x1="46" y1="94" x2="196" y2="94" stroke="#38BDF8" stroke-width="8" stroke-linecap="round" opacity="0.28"/>
+  <line x1="48" y1="94" x2="194" y2="94" stroke="#7DD3FC" stroke-width="4" stroke-dasharray="10 6" stroke-linecap="round"/>
+
+  <!-- 8. Center Boost Lightning Bolt (Shadow + Crisp Vector) -->
+  <polygon points="131,73 91,137 120,137 109,193 155,123 126,123" fill="#000000" opacity="0.42" transform="translate(0, 5)"/>
+  <polygon points="131,73 91,137 120,137 109,193 155,123 126,123" fill="url(#boltGrad)" stroke="#FFFBEB" stroke-width="2.5" stroke-linejoin="round"/>
+
+  <!-- 9. "80%" Pill Badge on the Right -->
+  <rect x="144" y="79" width="76" height="36" rx="18" ry="18" fill="#000000" opacity="0.45"/>
+  <rect x="144" y="75" width="76" height="36" rx="18" ry="18" fill="url(#badgeGrad)" stroke="#E0F2FE" stroke-width="2.8"/>
+  <text x="182" y="99" font-family="Segoe UI, Arial, sans-serif" font-weight="900" font-size="20" fill="#FFFFFF" text-anchor="middle">80%</text>
+</svg>
