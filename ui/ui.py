@@ -6,7 +6,6 @@
   elevated scheduled task Battery-ChargeLimit).
 """
 import ctypes
-import datetime as dt
 import subprocess
 import sys
 from pathlib import Path
