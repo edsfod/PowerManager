@@ -29,11 +29,13 @@ D:\miniforge3\python.exe "$env:USERPROFILE\Desktop\PowerManager\agent\agent.py" 
 |---|---|---|
 | 常驻：收电源通知（合盖、亮屏关屏、插拔电、电量）、按模式改设置、闹钟、兜底、醒来通知 | `agent/`（`agent.py` 管 Windows，`brain.py` 做决定） | 计划任务 `PowerManager-Agent`，登录时起，用户权限，崩了自动重启；不轮询 |
 | EC 充电上限 75%–80% 与临时冲高 | `battery-charge/`，见它的 `README.md` | 计划任务 `Battery-ChargeLimit`，管理员，跑一次就退出：开机、登录、醒来、插拔电时，以及常驻叫它时 |
-| 界面 | `ui/ui.py`，图标 `ui/icon.*` | 桌面与开始菜单 `PowerManager.lnk` |
+| 界面 | `ui/web/index.html`（页面，WebView2 里显示），`ui/ui.py`（后端），图标 `ui/icon.*` | 桌面与开始菜单 `PowerManager.lnk`；`python ui\ui.py --debug` 带开发者工具 |
 | 共用：EC 的 WMI 调用、电源设置、系统日志、通知、路径 | `common/` | |
 | 安装 | `install.ps1`（管理员） | 改了任务、快捷方式、路径后重跑 |
 | 笔记 | `notes/`：电池 WMI 接口反编译、换电池后耗电快、醒来通知的流程与坑 | |
 | 自适应充电电流算法（不接入，理由在它的 `README.md`） | `charge_current_model/` | |
+
+依赖（`D:\miniforge3`，conda-forge）：`comtypes`（WMI、计划任务、快捷方式）、`pywebview`（界面，连带 `pythonnet`；用系统自带的 WebView2）。
 
 安装：管理员 PowerShell 里 `powershell -ExecutionPolicy Bypass -File install.ps1`。它注册两个任务，删掉旧的 `PowerManager-ModeWatch`，登记通知发送者 `PowerManager`，建快捷方式并启动。
 
