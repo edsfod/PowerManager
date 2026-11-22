@@ -33,7 +33,6 @@ python "$env:USERPROFILE\Desktop\PowerManager\agent\agent.py" --restore-original
 | 共用：EC 的 WMI 调用、电源设置、系统日志、通知、路径 | `common/` | |
 | 安装 | `install.ps1`（管理员） | 改了任务、快捷方式、路径后重跑 |
 | 笔记 | `notes/`：电池 WMI 接口反编译、换电池后耗电快、醒来通知的流程与坑 | |
-| 自适应充电电流算法（不接入，理由在它的 `README.md`） | `charge_current_model/` | |
 
 依赖（conda-forge 或 pip）：`comtypes`（WMI、计划任务、快捷方式）、`pywebview`（界面，连带 `pythonnet`；用系统自带的 WebView2）。
 
