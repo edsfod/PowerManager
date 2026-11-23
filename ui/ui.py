@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -148,14 +149,76 @@ class Api:
                 return {'ok': True}
         return {'ok': False, 'msg': '没能启动常驻程序：以管理员身份运行一次 install.ps1。'}
 
+    def set_expanded(self, expanded):
+        hwnd = _find_window('PowerManager')
+        if not hwnd:
+            return
+        if expanded:
+            if not u32.IsZoomed(hwnd):
+                _animate_width(hwnd, 960)
+        else:
+            if u32.IsZoomed(hwnd):
+                u32.ShowWindow(hwnd, 9)   # SW_RESTORE
+            _animate_width(hwnd, 720)
 
-def set_window_icon(title):
-    """The WinForms window shows python's icon: give it ours (top-level windows of this process titled `title`)."""
-    ico = str(HERE / 'icon.ico')
-    u32.LoadImageW.restype = wt.HANDLE
-    big = u32.LoadImageW(None, ico, 1, 48, 48, 0x10)
-    small = u32.LoadImageW(None, ico, 1, 16, 16, 0x10)
+
+_anim_gen = 0
+_anim_lock = threading.Lock()
+
+
+def _animate_width(hwnd, width_logical, duration_s=0.18, steps=15):
+    """Smoothly resize `hwnd` to `width_logical` around its current position, clamped to the monitor."""
+    global _anim_gen
+    with _anim_lock:
+        _anim_gen += 1
+        gen = _anim_gen
+
+    u32.MonitorFromWindow.restype = wt.HMONITOR
+    hmon = u32.MonitorFromWindow(hwnd, 2)
+    mi = _MONITORINFO(cbSize=ctypes.sizeof(_MONITORINFO))
+    wr = wt.RECT()
+    if not (hmon and u32.GetMonitorInfoW(hmon, ctypes.byref(mi)) and u32.GetWindowRect(hwnd, ctypes.byref(wr))):
+        return
+    work = mi.rcWork
+    scale = (u32.GetDpiForWindow(hwnd) / 96.0) if hasattr(u32, 'GetDpiForWindow') else 1.0
+    start_w = wr.right - wr.left
+    target_w = min(work.right - work.left, int(round(width_logical * scale)))
+    if start_w == target_w:
+        return
+    y, h = wr.top, wr.bottom - wr.top
+    snap_left = abs(wr.left - work.left) <= 12
+    snap_right = not snap_left and abs(wr.right - work.right) <= 12
+    cx = (wr.left + wr.right) / 2.0
+
+    def run():
+        t0 = time.perf_counter()
+        for i in range(1, steps + 1):
+            if gen != _anim_gen or u32.IsZoomed(hwnd):
+                return
+            p = i / steps
+            eased = 1.0 - (1.0 - p) ** 3
+            cur_w = int(round(start_w + (target_w - start_w) * eased))
+            if snap_left:
+                x = work.left
+            elif snap_right:
+                x = work.right - cur_w
+            else:
+                x = max(work.left, min(work.right - cur_w, int(round(cx - cur_w / 2.0))))
+            u32.SetWindowPos(hwnd, 0, x, y, cur_w, h, 0x0004 | 0x0010)
+            dt_left = (t0 + i * (duration_s / steps)) - time.perf_counter()
+            if dt_left > 0:
+                time.sleep(dt_left)
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+class _MONITORINFO(ctypes.Structure):
+    _fields_ = [('cbSize', wt.DWORD), ('rcMonitor', wt.RECT), ('rcWork', wt.RECT), ('dwFlags', wt.DWORD)]
+
+
+def _find_window(title):
     pid = os.getpid()
+    found = []
     WNDENUMPROC = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
 
     def cb(hwnd, _):
@@ -164,10 +227,46 @@ def set_window_icon(title):
         buf = ctypes.create_unicode_buffer(64)
         u32.GetWindowTextW(hwnd, buf, 64)
         if p.value == pid and buf.value == title:
-            u32.SendMessageW(hwnd, 0x80, 1, big)     # WM_SETICON, ICON_BIG
-            u32.SendMessageW(hwnd, 0x80, 0, small)   # ICON_SMALL
+            found.append(hwnd)
+            return False
         return True
     u32.EnumWindows(WNDENUMPROC(cb), 0)
+    return found[0] if found else None
+
+
+def _center_on_monitor(hwnd, width_logical=None):
+    """Center `hwnd` (optionally resizing width) within the work area of its current monitor."""
+    u32.MonitorFromWindow.restype = wt.HMONITOR
+    hmon = u32.MonitorFromWindow(hwnd, 2)   # MONITOR_DEFAULTTONEAREST
+    mi = _MONITORINFO(cbSize=ctypes.sizeof(_MONITORINFO))
+    wr = wt.RECT()
+    if not (hmon and u32.GetMonitorInfoW(hmon, ctypes.byref(mi)) and u32.GetWindowRect(hwnd, ctypes.byref(wr))):
+        return
+    work = mi.rcWork
+    scale = (u32.GetDpiForWindow(hwnd) / 96.0) if hasattr(u32, 'GetDpiForWindow') else 1.0
+    work_w, work_h = work.right - work.left, work.bottom - work.top
+    ww = min(work_w, int(round(width_logical * scale))) if width_logical else min(work_w, wr.right - wr.left)
+    wh = min(int(work_h * 0.94), wr.bottom - wr.top)
+    x = max(work.left, work.left + (work_w - ww) // 2)
+    y = max(work.top, work.top + (work_h - wh) // 2)
+    flags = 0x0004 | 0x0010   # SWP_NOZORDER | SWP_NOACTIVATE
+    if not width_logical and wh == (wr.bottom - wr.top):
+        flags |= 0x0001       # SWP_NOSIZE
+    u32.SetWindowPos(hwnd, 0, x, y, ww, wh, flags)
+
+
+def _init_window(title):
+    """Set our icon and center the window on its monitor."""
+    hwnd = _find_window(title)
+    if not hwnd:
+        return
+    ico = str(HERE / 'icon.ico')
+    u32.LoadImageW.restype = wt.HANDLE
+    big = u32.LoadImageW(None, ico, 1, 48, 48, 0x10)
+    small = u32.LoadImageW(None, ico, 1, 16, 16, 0x10)
+    u32.SendMessageW(hwnd, 0x80, 1, big)     # WM_SETICON, ICON_BIG
+    u32.SendMessageW(hwnd, 0x80, 0, small)   # ICON_SMALL
+    _center_on_monitor(hwnd)
 
 
 def main():
@@ -178,7 +277,7 @@ def main():
         pass
     w = webview.create_window('PowerManager', url=(HERE / 'web' / 'index.html').as_uri(), js_api=Api(),
                               width=720, height=880, min_size=(520, 600), background_color='#F3F3F3')
-    w.events.shown += lambda: set_window_icon('PowerManager')
+    w.events.shown += lambda: _init_window('PowerManager')
     webview.start(gui='edgechromium', debug='--debug' in sys.argv)
 
 
