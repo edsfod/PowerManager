@@ -159,6 +159,32 @@ public sealed class AgentNamedPipeIntegrationTests
     }
 
     [Fact]
+    public async Task RoundTrip_ConcurrentClients_AllSucceed()
+    {
+        string pipeName = NewPipeName();
+        int counter = 0;
+
+        using var server = new AgentNamedPipeServer(
+            _ => Task.FromResult(new AgentIpcResponse(Ok: true, Message: $"hit-{Interlocked.Increment(ref counter)}")),
+            pipeName);
+
+        server.Start();
+
+        var tasks = Enumerable.Range(0, 6)
+            .Select(_ => AgentNamedPipeClient.SendAsync(
+                new AgentIpcRequest(AgentIpcCommand.Ping),
+                pipeName,
+                timeoutMs: 3000))
+            .ToArray();
+
+        var responses = await Task.WhenAll(tasks);
+
+        Assert.Equal(6, responses.Length);
+        Assert.All(responses, r => Assert.True(r.Ok));
+        Assert.Equal(6, responses.Select(r => r.Message).Distinct().Count());
+    }
+
+    [Fact]
     public async Task Client_MissingPipe_ThrowsTimeoutException()
     {
         string missingPipe = NewPipeName();
