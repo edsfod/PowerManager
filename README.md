@@ -62,4 +62,5 @@
 | [docs/reference/](docs/reference/) | 长期有效的硬件 WMI/EC 接口与 Windows 现代待机/Toast 机制参考 |
 | [docs/investigations/](docs/investigations/) | 带时间戳的故障排查案卷 |
 | [docs/porting-guide.md](docs/porting-guide.md) | 未来更换新 Windows 笔记本时的 5 步硬件移植指南 |
+| [docs/roadmap.md](docs/roadmap.md) | 未排期的远期拓展方向与架构演进前置条件 |
 | [CHANGELOG.md](CHANGELOG.md) | 项目演进与变更历史 |

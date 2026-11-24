@@ -62,4 +62,5 @@
 | `docs/reference/` | 客观硬件/系统机制事实、接口字节契约、实验环境与复现出处 | 软件应当如何设计的处方性语句（如“因此任务必须用 S4U”） |
 | `docs/investigations/` | 带 ISO 日期前缀的一次性故障排查快照与未决线索 | 长期有效的通用规范或系统设计 |
 | [porting-guide.md](porting-guide.md) | 换新 Windows 设备时的硬件移植操作步骤（SOP） | 日常编码红线 |
+| [roadmap.md](roadmap.md) | 未排期的远期演进方向与架构前置条件 | 当前版本验收需求或已落地的实现细节 |
 | `docs/conventions.md` | 静态工程约束、测试规范与文档边界规则 | 一次性操作步骤 |
