@@ -50,7 +50,7 @@ internal sealed class MainForm : Form
         _smokeTest = smokeTest;
 
         bool dark = IsSystemDarkMode();
-        Color bg = dark ? Color.FromArgb(0x20, 0x20, 0x20) : Color.FromArgb(0xF3, 0xF3, 0xF3);
+        Color bg = GetThemeBackground(dark);
 
         Text = "PowerManager";
         BackColor = bg;
@@ -58,12 +58,13 @@ internal sealed class MainForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         Icon = LoadEmbeddedIcon();
 
-        ApplyInitialBounds();
+        ApplyInitialBounds(expanded: _backend.GetRulesExpandedPref());
 
         _webView = new WebView2
         {
             Dock = DockStyle.Fill,
-            DefaultBackgroundColor = bg
+            DefaultBackgroundColor = bg,
+            AllowExternalDrop = false
         };
         Controls.Add(_webView);
 
@@ -72,23 +73,63 @@ internal sealed class MainForm : Form
 
         Shown += OnFormShownAsync;
         Activated += OnFormActivated;
+        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
 
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        if (IsSystemDarkMode())
-        {
-            int useDark = 1;
-            _ = DwmSetWindowAttribute(Handle, DwmwaUseImmersiveDarkMode, ref useDark, sizeof(int));
-        }
+        ApplyTitleBarTheme(IsSystemDarkMode());
     }
 
-    private void ApplyInitialBounds()
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+            _animTimer.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category != UserPreferenceCategory.General || IsDisposed || !IsHandleCreated)
+        {
+            return;
+        }
+
+        BeginInvoke(() =>
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            bool dark = IsSystemDarkMode();
+            Color bg = GetThemeBackground(dark);
+            BackColor = bg;
+            _webView.DefaultBackgroundColor = bg;
+            ApplyTitleBarTheme(dark);
+        });
+    }
+
+    private void ApplyTitleBarTheme(bool dark)
+    {
+        int useDark = dark ? 1 : 0;
+        _ = DwmSetWindowAttribute(Handle, DwmwaUseImmersiveDarkMode, ref useDark, sizeof(int));
+    }
+
+    private static Color GetThemeBackground(bool dark) =>
+        dark ? Color.FromArgb(0x20, 0x20, 0x20) : Color.FromArgb(0xF3, 0xF3, 0xF3);
+
+    private void ApplyInitialBounds(bool expanded)
     {
         var screen = Screen.FromPoint(Cursor.Position).WorkingArea;
         float scale = DeviceDpi > 0 ? DeviceDpi / 96f : 1f;
-        int w = Math.Min(screen.Width, (int)Math.Round(CompactLogicalWidth * scale));
+        int logicalW = expanded ? ExpandedLogicalWidth : CompactLogicalWidth;
+        int w = Math.Min(screen.Width, (int)Math.Round(logicalW * scale));
         int h = Math.Min((int)(screen.Height * 0.94), (int)Math.Round(InitialLogicalHeight * scale));
         Size = new Size(w, h);
         MinimumSize = new Size(
@@ -112,6 +153,7 @@ internal sealed class MainForm : Form
             var settings = _webView.CoreWebView2.Settings;
             settings.AreDefaultContextMenusEnabled = _debug;
             settings.AreDevToolsEnabled = _debug;
+            settings.AreBrowserAcceleratorKeysEnabled = _debug;
             settings.IsStatusBarEnabled = false;
             settings.IsZoomControlEnabled = false;
 
@@ -198,6 +240,14 @@ internal sealed class MainForm : Form
                     break;
                 }
 
+                case "refresh_ec":
+                    result = await _backend.RefreshEcAsync();
+                    break;
+
+                case "open_data_dir":
+                    result = _backend.OpenDataDir();
+                    break;
+
                 case "start_agent":
                     result = await _backend.StartAgentAsync();
                     break;
@@ -205,10 +255,16 @@ internal sealed class MainForm : Form
                 case "set_expanded":
                 {
                     bool expanded = req.Params?.GetBoolOrDefault("expanded") ?? false;
+                    _backend.SaveRulesExpandedPref(expanded);
                     AnimateWidth(expanded);
                     result = new UiActionResult(true);
                     break;
                 }
+
+                case "close_window":
+                    result = new UiActionResult(true);
+                    BeginInvoke(Close);
+                    break;
 
                 case "smoke_ready":
                 {

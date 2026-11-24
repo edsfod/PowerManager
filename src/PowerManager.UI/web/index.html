@@ -10,7 +10,7 @@
   --ink: #1b1b1b; --ink2: #5d5d5d; --ink3: #8b8b8b;
   --accent: #0f6cbd; --accent-ink: #ffffff; --accent-soft: #eaf2fb; --accent-line: #b4d3f2;
   --chip: #f7f7f7; --chip-hover: #efefef; --track: #ececec;
-  --green: #107c10; --amber: #9d5d00; --red: #c42b1c; --band: rgba(15,108,189,.16);
+  --green: #107c10; --amber: #9d5d00; --amber-soft: rgba(157,93,0,.10); --red: #c42b1c; --band: rgba(15,108,189,.16);
   --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.03);
   color-scheme: light;
 }
@@ -20,7 +20,7 @@
     --ink: #f3f3f3; --ink2: #c5c5c5; --ink3: #9a9a9a;
     --accent: #4cc2ff; --accent-ink: #00243a; --accent-soft: rgba(76,194,255,.12); --accent-line: rgba(76,194,255,.45);
     --chip: #333333; --chip-hover: #3c3c3c; --track: #3a3a3a;
-    --green: #6ccb5f; --amber: #fcb35b; --red: #ff99a4; --band: rgba(76,194,255,.22);
+    --green: #6ccb5f; --amber: #fcb35b; --amber-soft: rgba(252,179,91,.12); --red: #ff99a4; --band: rgba(76,194,255,.22);
     --shadow: none;
     color-scheme: dark;
   }
@@ -69,6 +69,8 @@ h1 { font-size: 1.45rem; font-weight: 600; margin: 0; letter-spacing: .01em; }
 .runbar { margin-top: .8rem; padding: .7rem .9rem; border-radius: .5rem; background: var(--accent-soft);
           display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
 .runbar .left { font-weight: 600; }
+.alertbar { margin-top: .65rem; padding: .55rem .85rem; border-radius: .45rem; background: var(--amber-soft);
+            border: 1px solid var(--amber); color: var(--amber); font-size: .86rem; font-weight: 500; }
 
 /* chips */
 .chips { display: inline-flex; gap: .3rem; flex-wrap: wrap; }
@@ -94,13 +96,24 @@ h1 { font-size: 1.45rem; font-weight: 600; margin: 0; letter-spacing: .01em; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: .3rem 1rem; margin-top: .6rem; font-size: .88rem; }
 .kv dt { color: var(--ink3); }
 .kv dd { margin: 0; color: var(--ink2); }
-.read-wrap { position: relative; display: inline-flex; padding: .35rem .5rem; margin: -.35rem -.5rem; cursor: help; }
-.read-badge { font-size: .8rem; font-weight: 500; color: var(--amber); border: 1px solid var(--amber);
-              background: rgba(252,179,91,.10); padding: .12rem .55rem; border-radius: .35rem; }
-.read-tip { position: absolute; right: 0; top: calc(100% + .1rem); z-index: 20; white-space: nowrap;
+.rules-foot { margin-top: .65rem; padding-top: .5rem; border-top: 1px solid var(--line2);
+              display: flex; align-items: center; justify-content: space-between; gap: .5rem; font-size: .82rem; color: var(--ink3); }
+.text-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; font-weight: 500; }
+.text-btn:hover { text-decoration: underline; }
+
+.read-actions { display: inline-flex; align-items: center; gap: .45rem; }
+.read-wrap { position: relative; display: inline-flex; padding: .2rem .25rem; margin: -.2rem -.25rem; cursor: help; }
+.read-badge { font-size: .78rem; font-weight: 500; color: var(--ink2); border: 1px solid var(--line);
+              background: var(--chip); padding: .14rem .55rem; border-radius: .35rem; }
+.read-badge.stale { color: var(--amber); border-color: var(--amber); background: var(--amber-soft); }
+.read-tip { position: absolute; right: 0; top: calc(100% + .2rem); z-index: 20; white-space: nowrap;
             background: var(--ink); color: var(--bg); font-size: .78rem; padding: .35rem .65rem; border-radius: .4rem;
             box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: opacity .12s; }
 .read-wrap:hover .read-tip { opacity: .96; }
+.mini-btn { border: 1px solid var(--line); background: var(--chip); color: var(--ink2); border-radius: .35rem;
+            padding: .16rem .55rem; font: inherit; font-size: .78rem; cursor: pointer; transition: background .12s, color .12s; }
+.mini-btn:hover:not(:disabled) { background: var(--chip-hover); color: var(--ink); }
+.mini-btn:disabled { opacity: .55; cursor: default; }
 
 /* battery */
 .big { font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 3.2rem; font-weight: 600;
@@ -179,8 +192,17 @@ hr { border: 0; border-top: 1px solid var(--line2); margin: .8rem 0; }
           <span class="left num" id="run-left"></span>
           <span class="row"><span class="faint">时长</span><span class="chips" id="hours"></span></span>
         </div>
+        <div class="alertbar hidden" id="forced-sleep-bar">
+          主动睡眠已触发：2 分钟内未入睡将自动休眠（开盖活动可中止）
+        </div>
       </div>
-      <div class="rules-panel"><dl class="kv" id="rules"></dl></div>
+      <div class="rules-panel">
+        <dl class="kv" id="rules"></dl>
+        <div class="rules-foot">
+          <span>Esc 关闭 · F5 刷新</span>
+          <button type="button" class="text-btn" id="open-data-dir">打开数据目录</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -188,10 +210,13 @@ hr { border: 0; border-top: 1px solid var(--line2); margin: .8rem 0; }
     <div>
       <div class="row spread">
         <h2 style="margin:0">电池</h2>
-        <span class="read-wrap hidden" id="read-wrap">
-          <span class="read-badge num" id="read-at"></span>
-          <span class="read-tip">事件触发：插拔电、醒来、电量每变 5%、冲高到点</span>
-        </span>
+        <div class="read-actions">
+          <span class="read-wrap hidden" id="read-wrap">
+            <span class="read-badge num" id="read-at"></span>
+            <span class="read-tip">事件触发：插拔电、醒来、电量每变 5%、冲高到点</span>
+          </span>
+          <button type="button" class="mini-btn" id="b-refresh-ec" title="按需拉起 EC 任务刷新温度、功耗与阈值读数">刷新读数</button>
+        </div>
       </div>
       <div class="row" style="gap:1.1rem; margin-top:.6rem; align-items:flex-end">
         <div class="big num" id="pct"></div>
@@ -295,8 +320,11 @@ const api = {
   get_state: () => callHost('get_state'),
   set_mode: (mode, hours) => callHost('set_mode', { mode, hours }),
   boost: (target, hold, maxh) => callHost('boost', { target, hold, maxh }),
+  refresh_ec: () => callHost('refresh_ec'),
+  open_data_dir: () => callHost('open_data_dir'),
   start_agent: () => callHost('start_agent'),
   set_expanded: expanded => callHost('set_expanded', { expanded }),
+  close_window: () => callHost('close_window'),
   smoke_ready: () => callHost('smoke_ready'),
 };
 
@@ -316,6 +344,25 @@ function chips(el, values, current, fmt, onPick) {
   }
 }
 
+function formatLeftFromUtc(isoUtc) {
+  const ms = Date.parse(isoUtc) - Date.now();
+  if (Number.isNaN(ms) || ms <= 0) return '即将到期';
+  const s = Math.floor(ms / 1000);
+  return s >= 3600 ? `${Math.floor(s / 3600)} 小时 ${Math.floor((s % 3600) / 60)} 分` : `${Math.max(1, Math.floor(s / 60))} 分钟`;
+}
+
+function updateLiveCountdowns() {
+  if (!S || document.hidden) return;
+  if (S.mode.mode === 'run' && S.mode.run_until_utc) {
+    $('run-left').textContent = `还剩 ${formatLeftFromUtc(S.mode.run_until_utc)}，${S.mode.until} 回到普通`;
+  }
+  if (S.boost.active && S.boost.full_since_utc) {
+    const held = Math.max(0, Math.floor((Date.now() - Date.parse(S.boost.full_since_utc)) / 60000));
+    $('bo-bar').style.width = Math.min(100, 100 * held / Math.max(1, S.boost.hold)) + '%';
+    $('bo-text').textContent = `已充到，插着电保持 ${held}/${S.boost.hold} 分钟；拔电也会回到 75%–80%`;
+  }
+}
+
 function render(s) {
   S = s;
   // agent
@@ -329,7 +376,11 @@ function render(s) {
   $('t-normal').classList.toggle('on', !run);
   $('t-run').classList.toggle('on', run);
   $('runbar').classList.toggle('hidden', !run);
-  if (run) $('run-left').textContent = `还剩 ${s.mode.left}，${s.mode.until} 回到普通`;
+  $('forced-sleep-bar').classList.toggle('hidden', !s.forced_sleep);
+  if (run) {
+    const leftText = s.mode.run_until_utc ? formatLeftFromUtc(s.mode.run_until_utc) : s.mode.left;
+    $('run-left').textContent = `还剩 ${leftText}，${s.mode.until} 回到普通`;
+  }
   chips($('hours'), [2, 4, 8, 12, 24], s.mode.hours, v => `${v} 小时`, v => setMode('run', v));
   const R = run
     ? [['插电', '15 分钟关屏，不睡；合盖继续跑'], ['用电池', '5 分钟关屏，30 分钟没人操作才睡；电池到 40 °C 提前睡'],
@@ -345,6 +396,7 @@ function render(s) {
   $('pct').innerHTML = b.pct == null ? '–' : `${b.pct}<small>%</small>`;
   $('flow').textContent = b.flow;
   $('read-at').textContent = b.read_at ? `上次更新：${b.read_at}` : '';
+  $('read-at').classList.toggle('stale', b.read_age_min != null && b.read_age_min >= 30);
   $('read-wrap').classList.toggle('hidden', !b.read_at);
   const [lo, hi] = b.band;
   $('hw').textContent = b.hw
@@ -418,6 +470,9 @@ let firstLoaded = false;
 async function refresh() {
   try {
     const state = await api.get_state();
+    if (!firstLoaded && state.rules_expanded) {
+      setExpandedUI(true);
+    }
     render(state);
     if (!firstLoaded) {
       firstLoaded = true;
@@ -466,6 +521,27 @@ $('agent-start').onclick = async () => {
   }
   await refresh();
 };
+$('b-refresh-ec').onclick = async () => {
+  const btn = $('b-refresh-ec');
+  btn.disabled = true; btn.textContent = '刷新中…';
+  try {
+    const r = await api.refresh_ec();
+    toast(r.ok ? (r.msg || '已刷新 EC 读数') : (r.msg || '刷新失败'));
+  } catch (err) {
+    toast(err.message || '刷新失败');
+  } finally {
+    btn.disabled = false; btn.textContent = '刷新读数';
+  }
+  await refresh();
+};
+$('open-data-dir').onclick = async () => {
+  try {
+    const r = await api.open_data_dir();
+    if (!r.ok) toast(r.msg || '无法打开目录');
+  } catch (err) {
+    toast(err.message || '无法打开目录');
+  }
+};
 $('b-go').onclick = async () => {
   const btn = $('b-go'); btn.disabled = true; btn.textContent = '正在写入 EC…';
   try {
@@ -478,6 +554,19 @@ $('b-go').onclick = async () => {
   }
   await refresh();
 };
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    api.close_window().catch(() => {});
+  } else if (e.key === 'F5') {
+    e.preventDefault();
+    refresh();
+  }
+});
+
+// 仅在窗口可见时本地重算剩余时间，零 IPC、零磁盘、零 EC 唤醒
+setInterval(updateLiveCountdowns, 30000);
 
 document.addEventListener('DOMContentLoaded', () => {
   syncExpandedByWidth();
