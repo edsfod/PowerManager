@@ -28,3 +28,10 @@
 ## 四、 新 Windows 机型硬件适配器接入
 
 - **方向描述**：未来更换其他 Windows 11 笔记本时，按 [porting-guide.md](porting-guide.md) 的 5 步硬件移植流程新增独立的 `PowerManager.Hardware.<Model>` 适配器实现，复用 `Core`、`Platform`、`Agent`、`UI` 与 `pmctl`。
+
+---
+
+## 五、 交互式双向 Toast 通知
+
+- **方向描述**：将当前的单向只读通知拓展为支持交互操作按钮（例如保持运行到期时直接在横幅上点击“延长 2 小时”，或低电量/出发提醒时快捷发起冲高）以及多类通知模板与静默时段策略。
+- **架构与文档前置条件**：需要为非打包桌面程序注册 COM Activator（`NotificationActivator`）或自定义协议 URI 回调通道，并在 `PowerManager.Agent` 中处理来自通知中心的反向指令；一旦引入上述双向协议与回调契约，应从 [windows-standby-and-toast.md](reference/windows-standby-and-toast.md) 拆出独立的通知接口文档统一归档。

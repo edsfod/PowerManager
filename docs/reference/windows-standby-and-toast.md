@@ -52,8 +52,12 @@ Windows 系统事件日志可通过 `wevtapi` 或 `wevtutil` 在**普通用户�
 
 ---
 
-## 三、 非打包桌面程序 WinRT Toast 通知约束
+## 三、 非打包桌面程序 WinRT Toast 通知机制
 
 1. **开始菜单快捷方式约束**：未打包（Unpackaged）桌面程序仅在 `HKCU\Software\Classes\AppUserModelId\<AppID>` 注册而开始菜单中缺少带有同一 `System.AppUserModel.ID` 的 `.lnk` 快捷方式时，系统不会弹出横幅（API 仍返回成功且仅留在通知历史中）。
 2. **锁屏期间抑制横幅**：开盖亮屏瞬间系统常处于锁屏界面，此时送达的通知会被系统折叠进通知中心而不弹横幅；会话锁屏与解锁状态变更由 Win32 `WTSRegisterSessionNotification` 推送。
 3. **PowerShell 7 兼容性限制**：PowerShell 7（`pwsh`）无法直接加载旧版 WinRT 通知命名空间类型，仅系统内置的 Windows PowerShell 5.1（`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`）支持该脚本桥接方式；直接调用原生 WinRT API 无此桥接限制。
+4. **WinRT Toast XML 与去重能力**：
+   - 在 `<toast>` 根节点附加 `<audio silent="true"/>` 可关闭系统提示音；
+   - `ToastNotification.Group` 与 `ToastNotification.Tag` 组合作为通知中心唯一键，发送同 `Group`/`Tag` 的新通知会自动替换旧通知；
+   - `<binding template="ToastGeneric">` 支持通过 `<text hint-maxLines="1">` 限制标题行数，以及通过 `<image placement="appLogoOverride" hint-crop="circle" src="file:///..."/>` 指定圆形应用图标。

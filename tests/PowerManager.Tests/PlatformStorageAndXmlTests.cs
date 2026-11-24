@@ -158,4 +158,26 @@ public sealed class PlatformStorageAndXmlTests
         Assert.True(resp.Ok);
         Assert.Equal("echo:Ping", resp.Message);
     }
+
+    [Fact]
+    public void ToastNotifierHelper_BuildToastXml_IncludesSilentMaxLinesAndLogoWhenExists()
+    {
+        string tempIcon = Path.Combine(Path.GetTempPath(), $"pm-icon-{Guid.NewGuid():N}.png");
+        File.WriteAllBytes(tempIcon, [0x89, 0x50, 0x4E, 0x47]);
+        try
+        {
+            string xml = ToastNotifierHelper.BuildToastXml("睡眠 2 分钟", "第一行\n第二行\n第三行忽略", tempIcon);
+            Assert.Contains("<audio silent=\"true\"/>", xml);
+            Assert.Contains("<text hint-maxLines=\"1\">睡眠 2 分钟</text>", xml);
+            Assert.Contains("placement=\"appLogoOverride\"", xml);
+            Assert.Contains("hint-crop=\"circle\"", xml);
+            Assert.Contains("<text>第一行</text>", xml);
+            Assert.Contains("<text>第二行</text>", xml);
+            Assert.DoesNotContain("第三行忽略", xml);
+        }
+        finally
+        {
+            if (File.Exists(tempIcon)) File.Delete(tempIcon);
+        }
+    }
 }

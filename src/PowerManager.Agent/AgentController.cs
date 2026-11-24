@@ -316,7 +316,7 @@ public sealed class AgentController : IDisposable
             if (EvaluateModeExpiryIfNeeded(nowUtc))
             {
                 ApplyCurrentPowerScheme("keep_running expired");
-                SendToastSafe("PowerManager", "保持运行已到期，已自动切回普通模式。");
+                SendToastSafe("保持运行到期", "已回到普通模式：插电闲置 1 小时睡，用电池 15 分钟睡，合盖 1 分钟睡", tag: "mode");
                 if (SleepGuardEngine.ShouldTriggerNormalLidCloseSleep(AgentMode.Normal, _lidClosed, DisplayAndInputInterop.HasExternalActiveDisplay()))
                 {
                     EnterForcedSleep("保持运行到期且合盖", nowUtc);
@@ -558,7 +558,7 @@ public sealed class AgentController : IDisposable
                 }
                 else
                 {
-                    SendToastSafe(summary.Title, summary.Body);
+                    SendToastSafe(summary.Title, summary.Body, tag: "wake");
                 }
             }
             catch (OperationCanceledException)
@@ -583,7 +583,7 @@ public sealed class AgentController : IDisposable
 
         if (pending.HasValue)
         {
-            SendToastSafe(pending.Value.Title, pending.Value.Body);
+            SendToastSafe(pending.Value.Title, pending.Value.Body, tag: "wake");
         }
     }
 
@@ -725,17 +725,17 @@ public sealed class AgentController : IDisposable
         }
     }
 
-    private void SendToastSafe(string title, string body)
+    private void SendToastSafe(string title, string body, string tag = "status")
     {
         if (_dryRun)
         {
-            _log.Info($"[DRY-RUN] Toast: {title} | {body}");
+            _log.Info($"[DRY-RUN] Toast (tag={tag}): {title} | {body}");
             return;
         }
 
         try
         {
-            ToastNotifierHelper.ShowToast(title, body);
+            ToastNotifierHelper.ShowToast(title, body, tag: tag);
         }
         catch (Exception ex)
         {

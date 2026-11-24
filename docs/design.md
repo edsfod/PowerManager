@@ -51,7 +51,7 @@
 离开超过 1 分钟且开盖亮屏后，后台线程延迟 15 秒通过 `wevtapi` 查询 `[t_off - 5s, t_on + 15s]` 窗口内的事件日志（`Kernel-Power` 506/507/42 与 `Power-Troubleshooter` 1），按以下规则拼装摘要并写日志：
 - **状态判定优先级**：有 `Power-Troubleshooter` 1（`TargetState=5`）休眠记录即计为“休眠”；否则 `507` 累计真实睡眠（`SleepEntered=true`）≥ 60 秒计为“睡眠”；其余计为“醒着”。
 - **原因与附加行**：`506` 排除 `Reason=20/25`，`507` 排除 `Reason=20`（不计为短暂唤醒）；若常驻在离开期间记录了主动动作备注（如“合盖 1 分钟”），首条备注覆盖入睡原因，后续备注附在第二行；当处于睡眠/休眠状态且期间累计醒着 ≥ 120 秒时附加显示“醒着共 X 分钟”。
-- 若处于锁屏状态则暂存至解锁后，通过 .NET 原生 WinRT Toast API 发送带 `AppUserModelID` 的通知。
+- 若处于锁屏状态则暂存至解锁后，通过 .NET 原生 WinRT Toast API 发送通知：统一使用 `AppUserModelID = "PowerManager"`、`Group = "PowerManager"`，按类别设置 `Tag`（醒来汇总 `wake`、保持运行到期 `mode`）以覆盖旧通知防堆积；XML 强制静音（`<audio silent="true"/>`）、标题单行（`hint-maxLines="1"`），并在程序目录存在 `icon.png` 时附带圆形图标（`appLogoOverride`）。
 
 ---
 
