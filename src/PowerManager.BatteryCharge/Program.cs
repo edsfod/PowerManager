@@ -144,7 +144,7 @@ public static class Program
         {
             double chargeW = win.ChargeMw / 1000.0;
             double dischargeW = win.DischargeMw / 1000.0;
-            Console.WriteLine($"电池状态: {(win.Charging ? "充电中" : "未充电")} | 充 {chargeW:0.1} W / 放 {dischargeW:0.1} W | 容量 {win.RemainingMwh}/{win.FullMwh} mWh");
+            Console.WriteLine($"电池状态: {(win.Charging ? "充电中" : "未充电")} | 充 {chargeW:F1} W / 放 {dischargeW:F1} W | 容量 {win.RemainingMwh}/{win.FullMwh} mWh");
         }
 
         if (state is null)
@@ -155,7 +155,7 @@ public static class Program
 
         var localUpdated = state.UpdatedAtUtc.ToLocalTime();
         Console.WriteLine($"EC 阈值: {state.Ec.HwStart}%–{state.Ec.HwStop}% (目标 {state.Target[0]}%–{state.Target[1]}%, hw_ok={state.Ec.HwOk})");
-        Console.WriteLine($"EC 读数: 电池 {(state.Ec.BatteryC.HasValue ? $"{state.Ec.BatteryC:0.1} °C" : "无效/N/A")} | 整机 {(state.Ec.SystemW.HasValue ? $"{state.Ec.SystemW} W" : "N/A")} | 充电芯片 {(state.Ec.ChargeMa.HasValue ? $"{state.Ec.ChargeMa} mA" : "N/A")}");
+        Console.WriteLine($"EC 读数: 电池 {(state.Ec.BatteryC.HasValue ? $"{state.Ec.BatteryC:F1} °C" : "无效/N/A")} | 整机 {(state.Ec.SystemW.HasValue ? $"{state.Ec.SystemW} W" : "N/A")} | 充电芯片 {(state.Ec.ChargeMa.HasValue ? $"{state.Ec.ChargeMa} mA" : "N/A")}");
         Console.WriteLine($"最近更新: {localUpdated:yyyy-MM-dd HH:mm:ss}（原因: {state.RunReason ?? "-"}）");
 
         if (state.Boost.Active)

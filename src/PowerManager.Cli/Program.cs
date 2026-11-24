@@ -83,7 +83,7 @@ public static class Program
         else
         {
             Console.WriteLine($"EC 阈值: {state.Ec.HwStart}%–{state.Ec.HwStop}%（目标 {state.Target[0]}%–{state.Target[1]}%，更新于 {state.UpdatedAtUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss}，原因: {state.RunReason ?? "-"}）");
-            Console.WriteLine($"EC 遥测: 电池 {(state.Ec.BatteryC.HasValue ? $"{state.Ec.BatteryC:0.1} °C" : "无效/N/A")} | 整机 {(state.Ec.SystemW.HasValue ? $"{state.Ec.SystemW} W" : "N/A")} | 充电电流 {(state.Ec.ChargeMa.HasValue ? $"{state.Ec.ChargeMa} mA" : "N/A")}");
+            Console.WriteLine($"EC 遥测: 电池 {(state.Ec.BatteryC.HasValue ? $"{state.Ec.BatteryC:F1} °C" : "无效/N/A")} | 整机 {(state.Ec.SystemW.HasValue ? $"{state.Ec.SystemW} W" : "N/A")} | 充电电流 {(state.Ec.ChargeMa.HasValue ? $"{state.Ec.ChargeMa} mA" : "N/A")}");
             if (state.Boost.Active)
             {
                 Console.WriteLine($"临时冲高: 进行中（目标 {state.Boost.TargetStart}%–{state.Boost.TargetStop}%，达标={state.Boost.ReachedTarget}，保持 {state.Boost.FullHoldMinutes}m，最晚 {state.Boost.DeadlineUtc?.ToLocalTime():HH:mm}）");

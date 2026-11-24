@@ -299,7 +299,7 @@ public sealed class AgentController : IDisposable
             if (frozen)
             {
                 double driftSec = (nowUtc - _timer.ScheduledTargetUtc!.Value).TotalSeconds;
-                _log.Info($"Timer frozen wake detected (drift={driftSec:0.1}s, lidClosed={_lidClosed}, mode={_modeState.ParsedMode}, ac={_acOnline})");
+                _log.Info($"Timer frozen wake detected (drift={driftSec:F1}s, lidClosed={_lidClosed}, mode={_modeState.ParsedMode}, ac={_acOnline})");
 
                 if (_forcedSleep is not null)
                 {
@@ -371,11 +371,11 @@ public sealed class AgentController : IDisposable
 
                     if (decision == CommuteTempDecision.TriggerOverheatSleep)
                     {
-                        EnterForcedSleep($"电池过热 {state!.Ec.BatteryC:0.1} °C", nowUtc);
+                        EnterForcedSleep($"电池过热 {state!.Ec.BatteryC:F1} °C", nowUtc);
                     }
                     else if (decision == CommuteTempDecision.SkipDueToActiveUser)
                     {
-                        _log.Info($"Commute overheat ({state?.Ec.BatteryC:0.1} C) skipped: lid open & active user (idle={idle.TotalSeconds:0}s)");
+                        _log.Info($"Commute overheat ({state?.Ec.BatteryC:F1} C) skipped: lid open & active user (idle={idle.TotalSeconds:0}s)");
                     }
                 }
             }
