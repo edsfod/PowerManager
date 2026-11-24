@@ -5,17 +5,57 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PowerManager</title>
 <style>
+/* ==========================================================================
+   Design Tokens — Fluent Light / Dark
+   All component rules consume semantic tokens below.
+   ========================================================================== */
 :root {
-  --bg: #f3f3f3; --card: #ffffff; --line: rgba(0,0,0,.07); --line2: rgba(0,0,0,.05);
-  --ink: #1b1b1b; --ink2: #5d5d5d; --ink3: #8b8b8b;
-  --accent: #0f6cbd; --accent-ink: #ffffff; --accent-soft: #eaf2fb; --accent-line: #b4d3f2;
-  --chip: #f7f7f7; --chip-hover: #efefef; --track: #ececec;
-  --green: #107c10; --amber: #9d5d00; --amber-soft: rgba(157,93,0,.10); --red: #c42b1c; --band: rgba(15,108,189,.16);
+  /* Surface & Border */
+  --bg: #f3f3f3;
+  --card: #ffffff;
+  --chip: #f7f7f7;
+  --chip-hover: #efefef;
+  --track: #ececec;
+  --line: rgba(0,0,0,.07);
+  --line2: rgba(0,0,0,.05);
   --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.03);
+
+  /* Text */
+  --ink: #1b1b1b;
+  --ink2: #5d5d5d;
+  --ink3: #8b8b8b;
+
+  /* Accent & Semantic Status */
+  --accent: #0f6cbd;
+  --accent-ink: #ffffff;
+  --accent-soft: #eaf2fb;
+  --accent-line: #b4d3f2;
+  --green: #107c10;
+  --amber: #9d5d00;
+  --amber-soft: rgba(157,93,0,.10);
+  --red: #c42b1c;
+  --band: rgba(15,108,189,.16);
+
+  /* Typography, Radius, Spacing & Motion */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  --radius-xs: .35rem;
+  --radius-sm: .4rem;
+  --radius-md: .5rem;
+  --radius-lg: .6rem;
+  --radius-pill: 999px;
+  --space-xs: .35rem;
+  --space-sm: .55rem;
+  --space-md: .75rem;
+  --space-lg: 1rem;
+  --ease-fluent: cubic-bezier(.2, .8, .2, 1);
+  --dur-fast: .12s;
+  --dur-normal: .18s;
+
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #202020; --card: #2b2b2b; --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.06);
     --ink: #f3f3f3; --ink2: #c5c5c5; --ink3: #9a9a9a;
     --accent: #4cc2ff; --accent-ink: #00243a; --accent-soft: rgba(76,194,255,.12); --accent-line: rgba(76,194,255,.45);
@@ -25,17 +65,26 @@
     color-scheme: dark;
   }
 }
+:root[data-theme="dark"] {
+  --bg: #202020; --card: #2b2b2b; --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.06);
+  --ink: #f3f3f3; --ink2: #c5c5c5; --ink3: #9a9a9a;
+  --accent: #4cc2ff; --accent-ink: #00243a; --accent-soft: rgba(76,194,255,.12); --accent-line: rgba(76,194,255,.45);
+  --chip: #333333; --chip-hover: #3c3c3c; --track: #3a3a3a;
+  --green: #6ccb5f; --amber: #fcb35b; --amber-soft: rgba(252,179,91,.12); --red: #ff99a4; --band: rgba(76,194,255,.22);
+  --shadow: none;
+  color-scheme: dark;
+}
 * { box-sizing: border-box; }
 html { font-size: clamp(11.5px, 1.62vh, 15.5px); }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
-  font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  font-family: var(--font-sans);
   font-size: 1rem; line-height: 1.45; -webkit-font-smoothing: antialiased;
   user-select: none; cursor: default;
 }
 .num { font-variant-numeric: tabular-nums; }
 main { max-width: 44rem; min-height: 100vh; margin: 0 auto; padding: 1.1rem 1.25rem 1.15rem;
-       display: flex; flex-direction: column; transition: max-width .18s cubic-bezier(.2, .8, .2, 1); }
+       display: flex; flex-direction: column; transition: max-width var(--dur-normal) var(--ease-fluent); }
 main.expanded { max-width: 66rem; }
 @media (min-width: 1000px) {
   main { max-width: 66rem; }
@@ -163,6 +212,12 @@ hr { border: 0; border-top: 1px solid var(--line2); margin: .8rem 0; }
          padding: .55rem 1rem; border-radius: .45rem; font-size: .88rem; opacity: 0; transition: opacity .2s; pointer-events: none;
          max-width: 90vw; }
 .toast.show { opacity: .95; }
+.mock-bar { margin-top: var(--space-md); padding: .5rem .75rem; border: 1px dashed var(--accent-line);
+            border-radius: var(--radius-md); background: var(--accent-soft);
+            display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap;
+            font-size: .8rem; color: var(--ink2); }
+.mock-bar .chips { gap: .25rem; }
+.mock-bar .chip { padding: .14rem .5rem; font-size: .78rem; }
 .hidden { display: none !important; }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -277,6 +332,10 @@ hr { border: 0; border-top: 1px solid var(--line2); margin: .8rem 0; }
       <div class="faint" id="bo-text"></div>
     </div>
   </section>
+  <footer class="mock-bar hidden" id="mock-bar">
+    <span>离线预览模式（Mock 桥接）</span>
+    <span class="chips" id="mock-presets"></span>
+  </footer>
 </main>
 <div class="toast" id="toast"></div>
 
@@ -285,12 +344,150 @@ const $ = id => document.getElementById(id);
 let S = null;
 const pick = { target: null, hold: null, maxh: null };
 
-/* WebView2 JSON RPC bridge */
+/* WebView2 JSON-RPC bridge with standalone browser Mock fallback */
+const hasWebViewHost = !!(window.chrome && window.chrome.webview);
 let rpcSeq = 1;
 const rpcPending = new Map();
+
+function createMockHost() {
+  const fmtHm = d => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const state = {
+    agent: true,
+    dry_run: false,
+    forced_sleep: false,
+    rules_expanded: false,
+    data_dir: 'C:\\Users\\Demo\\AppData\\Local\\PowerManager',
+    mode: { mode: 'normal', hours: 12, until: null, left: null, run_until_utc: null },
+    power_mode: { ac: '最佳性能', dc: '平衡' },
+    battery: {
+      pct: 78, ac: true, flow: '插着电，停在 75%–80%（保护电池）',
+      band: [75, 80], hw: [75, 80],
+      temp: 29.4, system_w: 18, charge_ma: 0, hottest: 44,
+      read_at: fmtHm(new Date()), read_age_min: 2, slow: false,
+      last: '上次睡眠：2 分钟（合盖 1 分钟 · 开盖唤醒 · 78%→78%）'
+    },
+    boost: { active: false },
+    boost_prefs: { target: 95, hold: 60, maxh: 4 }
+  };
+
+  function applyPreset(name) {
+    state.agent = true;
+    state.forced_sleep = false;
+    state.boost = { active: false };
+    state.mode = { mode: 'normal', hours: 12, until: null, left: null, run_until_utc: null };
+    state.battery.band = [75, 80];
+    state.battery.hw = [75, 80];
+    state.battery.ac = true;
+    state.battery.pct = 78;
+    state.battery.read_age_min = 2;
+    state.battery.flow = '插着电，停在 75%–80%（保护电池）';
+    if (name === 'run') {
+      const end = new Date(Date.now() + 4 * 3600 * 1000);
+      state.mode = { mode: 'run', hours: 4, until: fmtHm(end), left: '4 小时 0 分', run_until_utc: end.toISOString() };
+    } else if (name === 'boost') {
+      const end = new Date(Date.now() + 4 * 3600 * 1000);
+      state.battery.pct = 88;
+      state.battery.band = [90, 95];
+      state.battery.hw = [90, 95];
+      state.battery.charge_ma = 2400;
+      state.battery.flow = '正在充电（2400 mA）';
+      state.boost = { active: true, target: 95, hold: 60, held: null, full_since_utc: null, deadline: fmtHm(end) };
+    } else if (name === 'forced') {
+      state.forced_sleep = true;
+      state.battery.ac = false;
+      state.battery.pct = 46;
+      state.battery.flow = '用电池中';
+      state.power_mode.dc = '最佳能效';
+    } else if (name === 'offline') {
+      state.agent = false;
+      state.battery.read_age_min = 45;
+    }
+  }
+
+  function initToolbar() {
+    const bar = $('mock-bar');
+    const box = $('mock-presets');
+    bar.classList.remove('hidden');
+    const items = [
+      ['正常', () => applyPreset('normal')],
+      ['保持运行', () => applyPreset('run')],
+      ['冲高中', () => applyPreset('boost')],
+      ['主动睡眠', () => applyPreset('forced')],
+      ['常驻离线', () => applyPreset('offline')],
+      ['浅/深色', () => {
+        const root = document.documentElement;
+        const cur = root.getAttribute('data-theme');
+        const next = cur === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+      }]
+    ];
+    for (const [label, fn] of items) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.textContent = label;
+      b.onclick = () => { fn(); refresh(); };
+      box.appendChild(b);
+    }
+  }
+
+  return {
+    initToolbar,
+    async call(method, params) {
+      switch (method) {
+        case 'get_state':
+          return JSON.parse(JSON.stringify(state));
+        case 'set_mode': {
+          const mode = params.mode || 'normal';
+          const hours = Number(params.hours || 12);
+          if (mode === 'run') {
+            const end = new Date(Date.now() + hours * 3600 * 1000);
+            state.mode = { mode: 'run', hours, until: fmtHm(end), left: `${hours} 小时 0 分`, run_until_utc: end.toISOString() };
+          } else {
+            state.mode = { mode: 'normal', hours: state.mode.hours, until: null, left: null, run_until_utc: null };
+          }
+          return { ok: true };
+        }
+        case 'boost': {
+          const target = Number(params.target || 95);
+          const hold = Number(params.hold || 60);
+          const maxh = Number(params.maxh || 4);
+          const end = new Date(Date.now() + maxh * 3600 * 1000);
+          state.boost_prefs = { target, hold, maxh };
+          state.battery.band = [target - 5, target];
+          state.battery.hw = [target - 5, target];
+          state.boost = { active: true, target, hold, held: null, full_since_utc: null, deadline: fmtHm(end) };
+          return { ok: true, msg: `Mock：已开始冲高到 ${target}%` };
+        }
+        case 'refresh_ec':
+          state.battery.read_at = fmtHm(new Date());
+          state.battery.read_age_min = 0;
+          return { ok: true, msg: 'Mock：已刷新 EC 读数' };
+        case 'open_data_dir':
+          return { ok: true, msg: `Mock：数据目录 ${state.data_dir}` };
+        case 'start_agent':
+          state.agent = true;
+          return { ok: true };
+        case 'set_expanded':
+          state.rules_expanded = !!params.expanded;
+          return { ok: true };
+        case 'close_window':
+          toast('Mock 模式：Esc 关闭窗口');
+          return { ok: true };
+        case 'smoke_ready':
+          return { ok: true };
+        default:
+          throw new Error(`未知方法：${method}`);
+      }
+    }
+  };
+}
+
+const mockHost = hasWebViewHost ? null : createMockHost();
+
 function callHost(method, params) {
-  if (!window.chrome || !window.chrome.webview) {
-    return Promise.reject(new Error('WebView2 桥接不可用'));
+  if (!hasWebViewHost) {
+    return mockHost.call(method, params ?? {});
   }
   const id = rpcSeq++;
   return new Promise((resolve, reject) => {
@@ -299,7 +496,7 @@ function callHost(method, params) {
   });
 }
 
-if (window.chrome && window.chrome.webview) {
+if (hasWebViewHost) {
   window.chrome.webview.addEventListener('message', ev => {
     const msg = ev.data;
     if (!msg) return;
@@ -569,6 +766,7 @@ window.addEventListener('keydown', e => {
 setInterval(updateLiveCountdowns, 30000);
 
 document.addEventListener('DOMContentLoaded', () => {
+  if (mockHost) mockHost.initToolbar();
   syncExpandedByWidth();
   refresh();
 });

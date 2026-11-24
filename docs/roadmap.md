@@ -35,3 +35,10 @@
 
 - **方向描述**：将当前的单向只读通知拓展为支持交互操作按钮（例如保持运行到期时直接在横幅上点击“延长 2 小时”，或低电量/出发提醒时快捷发起冲高）以及多类通知模板与静默时段策略。
 - **架构与文档前置条件**：需要为非打包桌面程序注册 COM Activator（`NotificationActivator`）或自定义协议 URI 回调通道，并在 `PowerManager.Agent` 中处理来自通知中心的反向指令；一旦引入上述双向协议与回调契约，应从 [windows-standby-and-toast.md](reference/windows-standby-and-toast.md) 拆出独立的通知接口文档统一归档。
+
+---
+
+## 六、 独立可复用的桌面 UI 壳与设计原子模板
+
+- **方向描述**：将当前 `PowerManager.UI` 中与电源业务无关的通用桌面基础设施——WinForms + WebView2 宿主、DWM 深浅色标题栏同步、单实例 `Mutex` 激活、DPI 自适应窗口缩放动画、JSON-RPC 桥接层与 Fluent Design Tokens——抽离为独立可复用的项目模板或共享库，供其他 Windows 轻量工具直接复用。
+- **架构前置条件**：保持当前单页前端与宿主之间的 JSON-RPC 契约（见 [design.md](design.md) §四）稳定，抽离后 PowerManager 仅提供业务后端服务与业务页面，不破坏零 Node 构建链的轻量约束。
