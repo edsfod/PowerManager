@@ -6,15 +6,16 @@
 
 ## 一、 架构分层与运行实体
 
-系统遵循“上层通用 Windows 调度”与“底层硬件适配器”分离的原则（[ADR-0001](adr/0001-scope-and-single-model.md)），由三个独立运行的实体组成（满足 `NFR-02`）：
+系统遵循“上层通用 Windows 调度”与“底层硬件适配器”分离的原则（[ADR-0001](adr/0001-scope-and-single-model.md)、[ADR-0006](adr/0006-csharp-architecture-ipc-and-data-dir.md)），采用单一 `.NET 10` 解决方案、三层共享类库（`PowerManager.Core`、`PowerManager.Platform`、`PowerManager.Hardware.MateBook`，配 `PowerManager.Tests` 单元测试）与四个独立可执行文件（发布至同一目录共享底层 DLL，满足 `NFR-02`）：
 
-| 运行实体 | 运行身份 | 生命周期与触发方式 | 核心职责 |
-|---|---|---|---|
-| **常驻调度（`agent`）** | 普通用户（不提权） | 计划任务 `PowerManager-Agent` 登录时启动（无超时限制 `PT0S`、多实例 `IgnoreNew`、允许电池运行、失败每 1 分钟重启最多 5 次）；纯事件驱动阻塞等待 | 监听系统电源/合盖/屏幕/电量/锁屏通知；按模式修改超时与电源模式；维护单一 Waitable Timer；执行休眠兜底与醒来通知；按需拉起 EC 任务（10 秒后读取温度结果） |
-| **硬件控制任务（`battery-charge`）** | 管理员（S4U 最高权限） | 计划任务 `Battery-ChargeLimit`（执行限时 `PT2M`、允许电池运行、多实例 `Queue`），在开机、登录、唤醒（`Power-Troubleshooter 1`）、插拔电（`Kernel-Power 105`）及被常驻显式触发时运行一次即退出 | 调用硬件适配器读写充电阈值与温度传感器；执行冲高与回落决策；写入 `state.json` 与历史记录 |
-| **交互界面（`ui`）** | 普通用户 | 由桌面/开始菜单快捷方式 `PowerManager.lnk` 按需启动（WebView2 渲染前端） | 展示当前模式、充电阈值与温度状态；接收用户切换模式或发起临时冲高的请求，向对应后台实体发起异步触发 |
+| 运行实体 | 可执行文件与子系统 | 运行身份 | 生命周期与触发方式 | 核心职责 |
+|---|---|---|---|---|
+| **常驻调度（`agent`）** | `PowerManager.Agent.exe`（`WinExe`） | 普通用户（不提权） | 计划任务 `PowerManager-Agent` 登录时启动（无超时限制 `PT0S`、多实例 `IgnoreNew`、允许电池运行、失败每 1 分钟重启最多 5 次）；纯事件驱动阻塞等待 | 监听系统电源/合盖/屏幕/电量/锁屏通知；按模式修改超时与电源模式；维护单一 Waitable Timer；执行休眠兜底与醒来通知；提供 Named Pipe 控制接口；按需拉起 EC 任务（10 秒后读取温度结果） |
+| **硬件控制任务（`battery-charge`）** | `PowerManager.BatteryCharge.exe`（`Exe`） | 管理员（S4U 最高权限） | 计划任务 `Battery-ChargeLimit`（执行限时 `PT2M`、允许电池运行、多实例 `Queue`），在开机、登录、唤醒（`Power-Troubleshooter 1`）、插拔电（`Kernel-Power 105`）及被显式触发时运行一次即退出 | 消费 `<DataDir>/requests/` 请求；调用硬件适配器读写充电阈值与温度传感器；执行冲高与回落决策；写入 `state.json` 与历史记录 |
+| **交互界面（`ui`）** | `PowerManager.UI.exe`（`WinExe`） | 普通用户 | 由桌面/开始菜单快捷方式 `PowerManager.lnk` 按需启动（WebView2 渲染前端） | 展示当前模式、充电阈值与温度状态；通过 Named Pipe 向 `agent` 切换模式，通过请求文件触发 `Battery-ChargeLimit` 发起临时冲高 |
+| **命令行工具（`pmctl`）** | `pmctl.exe`（`Exe`） | 普通用户（直写 EC 时可提权） | 终端按需手动执行 | 薄控制台入口，统一承接 `status`、`restore-original`、`boost` 等终端查看与控制命令，避免 `WinExe` 后台进程在终端输出错位 |
 
-**依赖方向约束**：`agent` 与 `ui` 严禁直接包含厂商专有 WMI 字节或 EC 寄存器逻辑；`agent` 仅通过触发提权计划任务 `Battery-ChargeLimit`（触发原因的传递载体随 C# IPC 协议确定）与状态文件 `state.json` 和硬件任务交互。
+**依赖方向约束**：编译期强制隔离——`PowerManager.Agent`、`PowerManager.UI`、`pmctl` 仅引用 `Core` 与 `Platform`，严禁引用 `PowerManager.Hardware.MateBook` 或包含厂商专有 WMI 字节/EC 寄存器逻辑；`PowerManager.BatteryCharge` 仅引用 `Core` 与 `Hardware.MateBook`，不携带 WebView2 依赖。普通权限进程仅通过 `<DataDir>/requests/` 原子 JSON 请求文件 + 触发 `Battery-ChargeLimit` 与状态文件 `state.json` 和硬件任务交互。
 
 ---
 
@@ -63,30 +64,31 @@
 
 ---
 
-## 四、 交互界面（`ui`）与跨进程通信
+## 四、 交互界面（`ui`）、命令行（`pmctl`）与跨进程通信
 
-目前 `ui` 的设计集中归口在本节，不单独拆分子目录文档：
+目前 `ui` 与 `pmctl` 的设计集中归口在本节，不单独拆分子目录文档：
 
-- **界面宿主与标识**：由 `Microsoft.Web.WebView2` 挂载系统自带 WebView2 渲染单页前端；进程启动时主动调用 `SetCurrentProcessExplicitAppUserModelID('PowerManager')`，使任务栏图标与通知发送者标识一致；支持 `--debug` 参数开启开发者工具。
-- **状态读取**：界面只读展示 `agent/var/mode.json`（当前模式与到期时间）、`battery-charge/var/state.json`（当前 EC 阈值、冲高倒计时与温度），以及直接读取非提权的当前电源模式（`powrprof`），并将用户界面偏好保存于 `ui/var/prefs.json`。
-- **异步控制边界**：界面以普通权限运行，不直接修改系统设置，也不弹出 UAC 确认框；具体 IPC 传输机制待 C# 工程实现阶段选定后补充：
-  - **切换睡眠模式**：向 `agent` 发起异步模式切换请求；
-  - **发起临时冲高**：向提权任务 `Battery-ChargeLimit` 发起临时冲高请求（目标 `85%–100%`、保持 `15–180` 分钟、最长 `1–12` 小时；界面提供滑动条与快捷档位：目标 `85/90/95/100%`，保持 `30/60/120` 分钟默认 `60`，最长 `2/4/8` 小时默认 `4`）。
+- **界面宿主与标识**：`PowerManager.UI.exe` 由 `Microsoft.Web.WebView2` 挂载系统自带 WebView2 渲染单页前端；进程启动时主动调用 `SetCurrentProcessExplicitAppUserModelID('PowerManager')`，使任务栏图标与通知发送者标识一致；支持 `--debug` 参数开启开发者工具与 `--data-dir` 覆盖数据目录。
+- **状态读取**：界面与 `pmctl` 只读展示 `<DataDir>/agent/mode.json`（当前模式与到期时间）、`<DataDir>/battery-charge/state.json`（当前 EC 阈值、冲高倒计时与温度），以及直接读取非提权的当前电源模式（`powrprof`）与标准 `BatteryStatus`；界面用户偏好保存于 `<DataDir>/ui/prefs.json`。
+- **跨进程通信（IPC）契约（[ADR-0006](adr/0006-csharp-architecture-ipc-and-data-dir.md)）**：界面与 `pmctl` 以普通权限运行，不直接修改系统设置，也不弹出 UAC 确认框：
+  - **`ui / pmctl ↔ agent`（同步 Named Pipe）**：`agent` 监听仅限当前用户 SID 访问的 Named Pipe（`\\.\pipe\PowerManager.Agent`），接收 JSON 命令（切换普通/保持运行模式、查询实时状态、执行 `--restore-original` 停用恢复），投递至主消息循环执行后同步返回结构化 JSON 回执（成功/失败原因）。
+  - **`agent / ui / pmctl → Battery-ChargeLimit`（原子请求文件 + 计划任务队列）**：调用方在 `<DataDir>/requests/` 目录先写临时文件再原子重命名为 `<utc-ticks>-<guid>.json`（携带触发原因或临时冲高参数：目标 `85%–100%`、保持 `15–180` 分钟、最长 `1–12` 小时；界面提供滑动条与快捷档位：目标 `85/90/95/100%`，保持 `30/60/120` 分钟默认 `60`，最长 `2/4/8` 小时默认 `4`），随后触发计划任务 `Battery-ChargeLimit`（由 `MultipleInstances=Queue` 保证串行执行）。提权任务消费请求时强制校验数值白名单边界并拒绝符号链接/重解析点，消费完毕即删除请求文件。
 
 ---
 
 ## 五、 状态持久化与安全回滚
 
-所有运行时状态与日志均存放在各模块独立的 `var/` 目录（不进入 Git）：
+生产环境运行时状态、请求与日志统一存放在 **`%LOCALAPPDATA%\PowerManager`**（记作 `<DataDir>`，不进入 Git）；`install.ps1` 注册计划任务时将展开后的绝对路径通过 `--data-dir` 显式写入任务参数（避免开机未登录阶段 S4U 任务解析用户环境变量失败），开发与验证阶段通过 `--data-dir ./var` 隔离。
 
-| 文件 | 类型 | 用途与回滚机制 |
+| 文件（相对于 `<DataDir>`） | 类型 | 用途与回滚机制 |
 |---|---|---|
-| `agent/var/original.json` | 持久 | 首次改动电源设置前保存的 Windows 原始超时与动作快照，供 `--restore-original` 一键恢复并停用 |
-| `agent/var/mode.json` | 持久 | 当前模式（普通 / 保持运行）与保持运行到期时间戳 |
-| `agent/var/agent.log` / `error.log` | 日志 | 常驻事件流水（含醒来通知内容，UTC，超 1 MB 轮换）与异常 traceback |
-| `battery-charge/var/state.json` | 缓存 | 最新 EC 读数、冲高目标与保持计时状态 |
-| `battery-charge/var/ec.log` / `history.log` / `error.log` | 日志 | EC 阈值改写记录、每次运行的电量/功率/温度快照（UTC，`CHG-03`；`history.log` 超 1 MB 轮换 `.1`）与异常 traceback |
-| `ui/var/prefs.json` | 持久 | 界面用户偏好 |
+| `agent/original.json` | 持久 | 首次改动电源设置前保存的 Windows 原始超时与动作快照（Schema 与 v1 兼容，支持切换时只读导入），供 `pmctl restore-original` 一键恢复并停用 |
+| `agent/mode.json` | 持久 | 当前模式（普通 / 保持运行）与保持运行到期时间戳 |
+| `agent/agent.log` / `error.log` | 日志 | 常驻事件流水（含醒来通知内容，UTC，超 1 MB 轮换）与异常堆栈 |
+| `battery-charge/state.json` | 缓存 | 最新 EC 读数、冲高目标与保持计时状态 |
+| `battery-charge/ec.log` / `history.log` / `error.log` | 日志 | EC 阈值改写记录、每次运行的电量/功率/温度快照（UTC，`CHG-03`；`history.log` 超 1 MB 轮换 `.1`）与异常堆栈 |
+| `requests/*.json` | 瞬态 | 普通权限进程投递给 `Battery-ChargeLimit` 的原子 JSON 触发/冲高请求文件，消费后删除 |
+| `ui/prefs.json` | 持久 | 界面用户偏好 |
 
 ---
 

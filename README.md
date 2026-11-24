@@ -24,11 +24,12 @@
 
 ### 当前状态与目标命令行约定
 
-> 当前 `PowerManager-v2` 处于**文档体系与独立验证基线阶段**，主程序尚未迁入；按 [ADR-0005](docs/adr/0005-choose-csharp-framework-dependent.md)，主程序将采用 **C#（.NET 10 SDK，Framework-Dependent）** 重写。
+> 当前 `PowerManager-v2` 处于**文档体系与独立验证基线阶段**，主程序尚未迁入；按 [ADR-0005](docs/adr/0005-choose-csharp-framework-dependent.md) 与 [ADR-0006](docs/adr/0006-csharp-architecture-ipc-and-data-dir.md)，主程序将采用 **C#（.NET 10 SDK，Framework-Dependent）** 重写，运行时状态与日志默认存放于 `%LOCALAPPDATA%\PowerManager`（支持 `--data-dir` 覆盖）。
 
-各运行实体的目标命令行约定如下（可执行文件名随 C# 工程落地确定）：
-- `agent`：`--status`（查看当前模式、系统设置与常驻状态）、`--restore-original`（停用并恢复 Windows 原始电源设置）；
-- `battery-charge`：`--status`（查看充电状态；事件驱动下插电且电量不变时几小时不更新读数时间属正常现象）、`--boost 95 --hold-min 60 --max-hours 4`。
+终端统一通过薄控制台命令 `pmctl.exe` 操作：
+- `pmctl status`：查看当前模式、系统电源设置、常驻状态与充电阈值状态（事件驱动下插电且电量不变时几小时不更新 EC 读数时间属正常现象）；
+- `pmctl restore-original`：停用常驻并恢复 Windows 原始电源设置；
+- `pmctl boost 95 --hold-min 60 --max-hours 4`：发起单次临时冲高（`PowerManager.BatteryCharge.exe` 亦保留 `--status` 与 `--boost` 直接参数供管理员终端使用）。
 
 ---
 
@@ -36,7 +37,7 @@
 
 - **主程序运行依赖（目标架构）**：Windows 11、`.NET 10 Desktop Runtime`（开发构建需 `.NET 10 SDK`）与系统自带 WebView2。
 - **独立验证脚本依赖（`scripts/`）**：Python 3.13（`verify_wmi_readonly.py` 另需 `comtypes`）。
-- **目标安装 / 卸载流程**：以管理员身份运行安装脚本（`install.ps1`）注册 `PowerManager-Agent` 与 `Battery-ChargeLimit` 计划任务、登记通知 `AppUserModelID` 与图标路径并生成桌面与开始菜单快捷方式 `PowerManager.lnk`（移动项目目录后需重新运行）。卸载时先执行 `agent --restore-original` 恢复 Windows 原电源设置，再运行安装脚本卸载参数移除计划任务、快捷方式与 `AppUserModelId` 注册表项。
+- **目标安装 / 卸载流程**：以管理员身份运行安装脚本（`install.ps1`）注册 `PowerManager-Agent` 与 `Battery-ChargeLimit` 计划任务（显式注入 `--data-dir`）、登记通知 `AppUserModelID` 与图标路径并生成桌面与开始菜单快捷方式 `PowerManager.lnk`（移动项目目录后需重新运行；从 v1 迁移时可通过 `-ImportOriginalFrom` 只读导入原 `original.json`）。卸载时先执行 `pmctl restore-original` 恢复 Windows 原电源设置，再运行安装脚本卸载参数移除计划任务、快捷方式与 `AppUserModelId` 注册表项。
 
 ---
 
@@ -57,7 +58,7 @@
 | [docs/requirements.md](docs/requirements.md) | 外部可验收的功能与非功能需求（`SLP-*` / `PWR-*` / `CHG-*` / `NTF-*` / `NFR-*`） |
 | [docs/design.md](docs/design.md) | 系统架构分层、模块契约、状态持久化与需求追踪矩阵 |
 | [docs/conventions.md](docs/conventions.md) | 高内聚边界、去硬编码、接口验证与文档归类规范 |
-| [docs/adr/](docs/adr/) | 关键架构决策记录（单机型范围、休眠兜底、拒绝自适应充电、事件驱动迁移、C# .NET 10 技术栈选型） |
+| [docs/adr/](docs/adr/) | 关键架构决策记录（单机型范围、休眠兜底、拒绝自适应充电、事件驱动迁移、C# 技术栈选型、多项目与 IPC/数据目录方案） |
 | [docs/reference/](docs/reference/) | 长期有效的硬件 WMI/EC 接口与 Windows 现代待机/Toast 机制参考 |
 | [docs/investigations/](docs/investigations/) | 带时间戳的故障排查案卷 |
 | [docs/porting-guide.md](docs/porting-guide.md) | 未来更换新 Windows 笔记本时的 5 步硬件移植指南 |
