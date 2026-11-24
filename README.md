@@ -1,67 +1,68 @@
 # PowerManager
 
-用于 MateBook 14 2024（`FLMH-XX`）**卸载华为电脑管家后**的电源管理：充电上限与临时冲高；普通 / 保持运行两种模式下的睡眠、合盖、电源键、电源模式；睡不下去时的兜底；每次醒来的通知。要什么见 `REQUIREMENTS.md`，怎么做见 `DESIGN.md`。
+用于 **MateBook 14 2024（`FLMH-XX`）** 在 **Windows 11** 卸载华为电脑管家后的轻量电源与电池管理工具：锁定 `75%–80%` 充电上限与单次临时冲高、调度“普通 / 保持运行”双模式睡眠、提供现代待机睡不下去时的休眠兜底与醒来汇总通知。
+
+- **适用范围**：仅支持 Windows 11 与华为 MateBook 14 2024（`FLMH-XX`）。
+- **明确不做**：不支持 Linux、macOS 或鸿蒙；不预先兼容其他品牌笔记本；不提供永久 100% 充电开关。
+
+---
 
 ## 用法
 
-- 桌面或开始菜单的 **PowerManager**：切换模式（普通 / 保持运行 2、4、8、12、24 小时），临时冲高充电。
-- 平时是普通模式；保持运行到时间自动回到普通模式。
+通过桌面或开始菜单的 **PowerManager**（`PowerManager.lnk`）打开界面，可切换模式与发起单次临时冲高。平时处于“普通”模式；“保持运行”模式可定时 `2 / 4 / 8 / 12 / 24` 小时，到期自动切回普通模式。
 
-| | 普通 | 保持运行（跑实验、通勤） |
+| 行为 | 普通模式 | 保持运行模式（跑实验 / 通勤） |
 |---|---|---|
-| 合盖 | 1 分钟后睡 | 继续跑 |
-| 插电闲置 | 15 分钟关屏，1 小时睡 | 15 分钟关屏，不睡 |
-| 用电池闲置 | 5 分钟关屏，15 分钟睡 | 5 分钟关屏，30 分钟睡；电池 40 °C 提前睡 |
-| 电源键 | 不起作用（睡着时按会唤醒；按住约 10 秒强制关机是硬件做的） | 同左 |
-| 电源模式 | 插电 Best Performance；用电池时电量 ≥ 50% Balanced，< 50% Best Power Efficiency | 同左 |
+| 合盖 | 无外接显示器时约 1 分钟后睡眠 | 继续运行 |
+| 插电闲置 | 15 分钟关屏，1 小时睡眠 | 15 分钟关屏，不自动睡眠 |
+| 用电池闲置 | 5 分钟关屏，15 分钟睡眠 | 5 分钟关屏，30 分钟睡眠；电池 ≥ 40 °C 提前睡眠 |
+| 电源键 | 禁用（仅保留待机按压唤醒与长按约 10 秒硬件强制关机） | 同左 |
+| 电源模式 | 插电 `Best Performance`；电池 ≥ 50% `Balanced`，< 50% `Best Power Efficiency` | 同左 |
 
-让它睡了 2 分钟还醒着（后台忙，或在包里被唤醒后睡不下去），就休眠。后台忙时程序没法让它真睡，只能休眠（`REQUIREMENTS.md`“实测”）；这时想真睡，只能自己在开始菜单点“睡眠”。
+- **休眠兜底**：主动要求睡眠后 2 分钟仍未进入睡眠阶段（如后台高负载），或合盖状态下意外唤醒后 2 分钟仍未睡下（“保持运行 + 插电”除外），自动强制休眠。后台高负载时程序无法强制进入现代待机，仅能休眠；若此时需要真睡，请通过开始菜单点击“睡眠”。
+- **临时冲高**：可将上限临时调至 `85%–100%`，满足达标保持满设定时间（15–180 分钟）、拔电或超过最长兜底小时数（1–12 小时）后自动回落至 `75%–80%`。
 
-```powershell
-python "$env:USERPROFILE\Desktop\PowerManager\agent\agent.py" --status              # 模式、设置、常驻在不在
-python "$env:USERPROFILE\Desktop\PowerManager\battery-charge\battery_charge.py" --status   # 充电
-python "$env:USERPROFILE\Desktop\PowerManager\agent\agent.py" --restore-original    # 停用，恢复 Windows 原设置
-```
+### 命令行约定（`pmctl.exe`）
 
-## 组成
+主程序基于 **C#（.NET 10 SDK，Framework-Dependent）** 实现（[ADR-0005](docs/adr/0005-choose-csharp-framework-dependent.md)、[ADR-0006](docs/adr/0006-csharp-architecture-ipc-and-data-dir.md)），运行时状态与日志默认存放于 `%LOCALAPPDATA%\PowerManager`（支持 `--data-dir` 覆盖）。
 
-| 东西 | 在哪 | 怎么跑 |
-|---|---|---|
-| 常驻：收电源通知（合盖、亮屏关屏、插拔电、电量）、按模式改设置、闹钟、兜底、醒来通知 | `agent/`（`agent.py` 管 Windows，`brain.py` 做决定） | 计划任务 `PowerManager-Agent`，登录时起，用户权限，崩了自动重启；不轮询 |
-| EC 充电上限 75%–80% 与临时冲高 | `battery-charge/`，见它的 `README.md` | 计划任务 `Battery-ChargeLimit`，管理员，跑一次就退出：开机、登录、醒来、插拔电时，以及常驻叫它时 |
-| 界面 | `ui/web/index.html`（页面，WebView2 里显示），`ui/ui.py`（后端），图标 `ui/icon.*` | 桌面与开始菜单 `PowerManager.lnk`；`python ui\ui.py --debug` 带开发者工具 |
-| 共用：EC 的 WMI 调用、电源设置、系统日志、通知、路径 | `common/` | |
-| 安装 | `install.ps1`（管理员） | 改了任务、快捷方式、路径后重跑 |
-| 笔记 | `notes/`：电池 WMI 接口反编译、换电池后耗电快、醒来通知的流程与坑 | |
+终端统一通过薄控制台命令 `pmctl.exe` 操作：
+- `pmctl status`：查看当前模式、系统电源设置、常驻状态与充电阈值状态（事件驱动下插电且电量不变时几小时不更新 EC 读数时间属正常现象）；
+- `pmctl mode normal` / `pmctl mode keep-running --hours 12`：切换模式；
+- `pmctl restore-original`：停用常驻并恢复 Windows 原始电源设置；
+- `pmctl boost 95 --hold-min 60 --max-hours 4`：发起单次临时冲高（`PowerManager.BatteryCharge.exe` 亦保留 `--status` 与 `--boost` 直接参数供管理员终端使用）。
 
-依赖（conda-forge 或 pip）：`comtypes`（WMI、计划任务、快捷方式）、`pywebview`（界面，连带 `pythonnet`；用系统自带的 WebView2）。
+---
 
-安装：管理员 PowerShell 里 `powershell -ExecutionPolicy Bypass -File install.ps1`（默认用 `PATH` 上的 `python.exe`，也可用 `-Python <路径>` 指定）。它注册两个任务，删掉旧的 `PowerManager-ModeWatch`，登记通知发送者 `PowerManager`，建快捷方式并启动。
+## 构建、安装与依赖
 
-## 核实
+- **主程序运行依赖**：Windows 11、`.NET 10 Desktop Runtime`（开发构建需 `.NET 10 SDK`）与系统自带 WebView2。
+- **独立验证脚本依赖（`scripts/`）**：Python 3.13（`verify_wmi_readonly.py` 另需 `comtypes`）。
+- **发布构建**：运行 `powershell -ExecutionPolicy Bypass -File scripts\publish.ps1`，将 4 个可执行文件（`PowerManager.Agent.exe`、`PowerManager.BatteryCharge.exe`、`PowerManager.UI.exe`、`pmctl.exe`）统一发布到 `dist/`（共享底层 DLL）。
+- **安装 / 卸载**：以管理员身份运行 `install.ps1` 注册 `PowerManager-Agent` 与 `Battery-ChargeLimit` 计划任务（显式注入展开后的 `--data-dir`）、登记通知 `AppUserModelID` 与图标路径并生成桌面与开始菜单快捷方式 `PowerManager.lnk`（移动项目目录后需重新运行；从 v1 迁移时可通过 `-ImportOriginalFrom` 只读导入原 `original.json`）。卸载时先执行 `pmctl restore-original` 恢复 Windows 原电源设置，再运行 `install.ps1 -Uninstall` 移除计划任务、快捷方式与 `AppUserModelId` 注册表项。
 
-- `agent.py --status`：`running: True`，设置与上表一致。
-- 合盖 3 分钟再开盖、解锁：弹一条“睡了 X 分钟”之类的通知；`agent/var/agent.log` 有对应的 `wake:` 行。
-- 充电：见 `battery-charge/README.md`“核实”。
-- 测试：`agent/` 里 `python -m unittest test_brain`；`battery-charge/` 里 `python -m unittest test_battery_charge`。
+---
 
-## 数据
+## 核验与测试
 
-`var/` 不进 git，也不在任何备份里。
+- **主程序单元测试**：`dotnet test PowerManager.sln`（覆盖状态转移、闹钟计算、日志摘要、`decide()` 与 WMI 编解码等核心纯函数）。
+- **接口与文档独立校验（`scripts/`）**：
+  - `python scripts/verify_power_boundaries.py check-s3`：核验系统 S0 / S3 睡眠支持状态；
+  - `python scripts/verify_wmi_readonly.py`：只读核验 `BatteryStatus` 与（管理员下）EC WMI 传感器读数；
+  - `python scripts/verify_doc_traceability.py`：校验需求文档与设计追踪矩阵的 100% 双向匹配。
 
-| 路径 | 类 | 是什么 |
-|---|---|---|
-| `agent/var/mode.json` | 保留 | 当前模式与保持运行到几点 |
-| `agent/var/original.json` | 保留 | 第一次改动前的 Windows 设置，`--restore-original` 用 |
-| `agent/var/agent.log`（`.1`） | 保留 | 常驻做的每件事、收到的合盖 / 屏幕 / 电源通知、醒来通知的内容（UTC）；超过 1 MB 轮换 |
-| `agent/var/error.log` | 保留 | 出错时的 traceback |
-| `agent/var/request.json` | 缓存 | 界面发给常驻的切换请求，读后即删 |
-| `battery-charge/var/` | | 见 `battery-charge/README.md` |
+---
 
-## 被别的程序按路径读的
+## 文档导航
 
-- 计划任务 `PowerManager-Agent` 读 `agent/agent.py`；`Battery-ChargeLimit` 读 `battery-charge/battery_charge.py`；两个 `PowerManager.lnk` 读 `ui/ui.py`、`ui/icon.ico`；注册表 `HKCU\Software\Classes\AppUserModelId\PowerManager` 读 `ui/icon.png`。挪动这些路径后重跑 `install.ps1`。
-
-## 来历
-
-`battery-charge/` 与电池接口反编译笔记 2026-11-22 从 Config（`topics/machine/windows/`）移出，之前的历史在 Config 的 git 里（`09bfa6e` 及以前）；Config 那边的规定与状态检查同日删去，两个项目不再互相读。同日重写为事件驱动：旧的 `power-mode/`（每 30 秒检查一次）与 `battery-charge` 每 5 分钟一次的定时触发都已去掉，见 `DESIGN.md`。
+| 文档 | 用途 |
+|---|---|
+| [docs/requirements.md](docs/requirements.md) | 外部可验收的功能与非功能需求（`SLP-*` / `PWR-*` / `CHG-*` / `NTF-*` / `NFR-*`） |
+| [docs/design.md](docs/design.md) | 系统架构分层、模块契约、状态持久化与需求追踪矩阵 |
+| [docs/conventions.md](docs/conventions.md) | 高内聚边界、去硬编码、接口验证与文档归类规范 |
+| [docs/adr/](docs/adr/) | 关键架构决策记录（单机型范围、休眠兜底、拒绝自适应充电、事件驱动迁移、C# 技术栈选型、多项目与 IPC/数据目录方案） |
+| [docs/reference/](docs/reference/) | 长期有效的硬件 WMI/EC 接口与 Windows 现代待机/Toast 机制参考 |
+| [docs/investigations/](docs/investigations/) | 带时间戳的故障排查案卷 |
+| [docs/porting-guide.md](docs/porting-guide.md) | 未来更换新 Windows 笔记本时的 5 步硬件移植指南 |
+| [docs/roadmap.md](docs/roadmap.md) | 未排期的远期拓展方向与架构演进前置条件 |
+| [CHANGELOG.md](CHANGELOG.md) | 项目演进与变更历史 |

@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PowerManager</title>
+<style>
+:root {
+  --bg: #f3f3f3; --card: #ffffff; --line: rgba(0,0,0,.07); --line2: rgba(0,0,0,.05);
+  --ink: #1b1b1b; --ink2: #5d5d5d; --ink3: #8b8b8b;
+  --accent: #0f6cbd; --accent-ink: #ffffff; --accent-soft: #eaf2fb; --accent-line: #b4d3f2;
+  --chip: #f7f7f7; --chip-hover: #efefef; --track: #ececec;
+  --green: #107c10; --amber: #9d5d00; --amber-soft: rgba(157,93,0,.10); --red: #c42b1c; --band: rgba(15,108,189,.16);
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.03);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202020; --card: #2b2b2b; --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.06);
+    --ink: #f3f3f3; --ink2: #c5c5c5; --ink3: #9a9a9a;
+    --accent: #4cc2ff; --accent-ink: #00243a; --accent-soft: rgba(76,194,255,.12); --accent-line: rgba(76,194,255,.45);
+    --chip: #333333; --chip-hover: #3c3c3c; --track: #3a3a3a;
+    --green: #6ccb5f; --amber: #fcb35b; --amber-soft: rgba(252,179,91,.12); --red: #ff99a4; --band: rgba(76,194,255,.22);
+    --shadow: none;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { font-size: clamp(11.5px, 1.62vh, 15.5px); }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  font-size: 1rem; line-height: 1.45; -webkit-font-smoothing: antialiased;
+  user-select: none; cursor: default;
+}
+.num { font-variant-numeric: tabular-nums; }
+main { max-width: 44rem; min-height: 100vh; margin: 0 auto; padding: 1.1rem 1.25rem 1.15rem;
+       display: flex; flex-direction: column; transition: max-width .18s cubic-bezier(.2, .8, .2, 1); }
+main.expanded { max-width: 66rem; }
+@media (min-width: 1000px) {
+  main { max-width: 66rem; }
+}
+header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .75rem; }
+h1 { font-size: 1.45rem; font-weight: 600; margin: 0; letter-spacing: .01em; }
+.pill { display: inline-flex; align-items: center; gap: .45rem; font-size: .86rem; color: var(--ink2);
+        padding: .3rem .75rem; border-radius: 999px; background: var(--card); border: 1px solid var(--line); }
+.dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--green); }
+.pill.off .dot { background: var(--red); }
+.link { color: var(--accent); cursor: pointer; font-weight: 600; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: .6rem; box-shadow: var(--shadow);
+        padding: 1rem 1.2rem; margin-bottom: .75rem; }
+.battery-card { flex: 1; margin-bottom: 0; display: flex; flex-direction: column; justify-content: space-between; }
+.card h2 { font-size: .8rem; font-weight: 600; color: var(--ink3); letter-spacing: .06em; margin: 0 0 .8rem; }
+.row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.spread { justify-content: space-between; }
+.muted { color: var(--ink2); }
+.faint { color: var(--ink3); font-size: .86rem; }
+
+/* mode tiles */
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.tile { border: 1px solid var(--line); border-radius: .5rem; padding: .8rem .95rem; cursor: pointer;
+        background: var(--chip); transition: background .12s, border-color .12s; }
+.tile:hover { background: var(--chip-hover); }
+.tile b { display: block; font-weight: 600; font-size: 1.02rem; }
+.tile span { display: block; font-size: .84rem; color: var(--ink2); margin-top: .15rem; }
+.tile.on { background: var(--accent-soft); border-color: var(--accent); }
+.tile.on b { color: var(--accent); }
+.runbar { margin-top: .8rem; padding: .7rem .9rem; border-radius: .5rem; background: var(--accent-soft);
+          display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+.runbar .left { font-weight: 600; }
+.alertbar { margin-top: .65rem; padding: .55rem .85rem; border-radius: .45rem; background: var(--amber-soft);
+            border: 1px solid var(--amber); color: var(--amber); font-size: .86rem; font-weight: 500; }
+
+/* chips */
+.chips { display: inline-flex; gap: .3rem; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: .4rem;
+        padding: .22rem .7rem; font: inherit; font-size: .88rem; cursor: pointer; }
+.chip:hover { background: var(--chip-hover); }
+.chip.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+
+.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .55rem; }
+.card-head h2 { margin: 0; }
+.toggle { background: none; border: 0; padding: 0; font: inherit; color: var(--ink2); font-size: .86rem; cursor: pointer;
+          display: inline-flex; align-items: center; gap: .3rem; }
+.toggle:hover { color: var(--ink); }
+.toggle::before { content: "›"; display: inline-block; transition: transform .15s; font-size: 1rem; line-height: 1; }
+.mode-card.expanded .toggle::before { transform: rotate(90deg); }
+.rules-panel { display: none; }
+.mode-card.expanded .mode-layout { display: grid; grid-template-columns: minmax(14rem, 17.5rem) 1fr; gap: 1rem; align-items: start; }
+.mode-card.expanded .tiles { grid-template-columns: 1fr; }
+.mode-card.expanded .rules-panel { display: block; border-left: 1px solid var(--line2); padding-left: 1rem;
+                                   animation: fadeSlide .18s ease-out; }
+@keyframes fadeSlide { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: translateX(0); } }
+.mode-card.expanded .kv { margin-top: 0; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: .3rem 1rem; margin-top: .6rem; font-size: .88rem; }
+.kv dt { color: var(--ink3); }
+.kv dd { margin: 0; color: var(--ink2); }
+.rules-foot { margin-top: .65rem; padding-top: .5rem; border-top: 1px solid var(--line2);
+              display: flex; align-items: center; justify-content: space-between; gap: .5rem; font-size: .82rem; color: var(--ink3); }
+.text-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; font-weight: 500; }
+.text-btn:hover { text-decoration: underline; }
+
+.read-actions { display: inline-flex; align-items: center; gap: .45rem; }
+.read-wrap { position: relative; display: inline-flex; padding: .2rem .25rem; margin: -.2rem -.25rem; cursor: help; }
+.read-badge { font-size: .78rem; font-weight: 500; color: var(--ink2); border: 1px solid var(--line);
+              background: var(--chip); padding: .14rem .55rem; border-radius: .35rem; }
+.read-badge.stale { color: var(--amber); border-color: var(--amber); background: var(--amber-soft); }
+.read-tip { position: absolute; right: 0; top: calc(100% + .2rem); z-index: 20; white-space: nowrap;
+            background: var(--ink); color: var(--bg); font-size: .78rem; padding: .35rem .65rem; border-radius: .4rem;
+            box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: opacity .12s; }
+.read-wrap:hover .read-tip { opacity: .96; }
+.mini-btn { border: 1px solid var(--line); background: var(--chip); color: var(--ink2); border-radius: .35rem;
+            padding: .16rem .55rem; font: inherit; font-size: .78rem; cursor: pointer; transition: background .12s, color .12s; }
+.mini-btn:hover:not(:disabled) { background: var(--chip-hover); color: var(--ink); }
+.mini-btn:disabled { opacity: .55; cursor: default; }
+
+/* battery */
+.big { font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 3.2rem; font-weight: 600;
+       line-height: 1; letter-spacing: -.02em; }
+.big small { font-size: 1.5rem; font-weight: 500; color: var(--ink2); margin-left: .1rem; }
+.flow { font-size: 1.02rem; }
+.meter { position: relative; margin: 1.3rem 0 .25rem; height: .55rem; border-radius: 999px; background: var(--track); }
+.meter .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--green); }
+.meter .band { position: absolute; top: -.35rem; bottom: -.35rem; border: 1.5px solid var(--accent); border-radius: .3rem;
+               background: var(--band); }
+.meter .band i { position: absolute; bottom: calc(100% + .2rem); left: 50%; transform: translateX(-50%);
+                 font-style: normal; font-size: .76rem; color: var(--accent); white-space: nowrap; font-weight: 600; }
+.scale { display: flex; justify-content: space-between; font-size: .74rem; color: var(--ink3); margin-top: .45rem; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .55rem; margin-top: .75rem; }
+.stat { background: var(--chip); border-radius: .45rem; padding: .55rem .75rem; }
+.stat.wide { grid-column: span 2; padding: .35rem; }
+.stat dt { font-size: .76rem; color: var(--ink3); }
+.stat dd { margin: .1rem 0 0; font-size: 1.12rem; font-weight: 600; }
+.pm-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; height: 100%; }
+.pm-box { background: var(--card); border: 1px solid var(--line); border-radius: .38rem; padding: .4rem .65rem;
+          display: flex; flex-direction: column; justify-content: center; }
+.pm-box span { font-size: .76rem; color: var(--ink3); }
+.pm-box b { margin-top: .1rem; font-size: 1.05rem; font-weight: 600; color: var(--ink); }
+.pm-box.on { border-color: var(--accent); background: var(--accent-soft); }
+.pm-box.on b { color: var(--accent); }
+.note { margin-top: .55rem; font-size: .86rem; color: var(--ink3); }
+.note.warn { color: var(--amber); }
+hr { border: 0; border-top: 1px solid var(--line2); margin: .8rem 0; }
+
+.boost-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: .5rem; }
+.boost-head b { font-weight: 600; font-size: 1.02rem; }
+.field { display: grid; grid-template-columns: 7.5rem 1fr; align-items: start; gap: .5rem; margin: .4rem 0; }
+.field label { color: var(--ink2); font-size: .9rem; padding-top: .15rem; }
+.ctrl { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+.slider-row { display: flex; align-items: center; gap: .6rem; }
+.slider-row input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); cursor: pointer; margin: 0; }
+.slider-val { min-width: 4.5rem; text-align: right; font-weight: 600; color: var(--accent); font-size: .92rem; }
+.btn { border: 0; border-radius: .4rem; padding: .5rem 1.2rem; font: inherit; font-weight: 600; cursor: pointer;
+       background: var(--accent); color: var(--accent-ink); }
+.btn:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: .55; cursor: default; }
+.boosting { background: var(--accent-soft); border-radius: .5rem; padding: .85rem 1rem; }
+.progress { height: .35rem; border-radius: 999px; background: var(--track); margin: .6rem 0 .45rem; overflow: hidden; }
+.progress > div { height: 100%; background: var(--accent); border-radius: 999px; }
+
+.toast { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); background: var(--ink); color: var(--bg);
+         padding: .55rem 1rem; border-radius: .45rem; font-size: .88rem; opacity: 0; transition: opacity .2s; pointer-events: none;
+         max-width: 90vw; }
+.toast.show { opacity: .95; }
+.hidden { display: none !important; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink3); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>电源与充电</h1>
+    <span id="agent" class="pill"><span class="dot"></span><span id="agent-text">…</span><span id="agent-start" class="link hidden">启动</span></span>
+  </header>
+
+  <section class="card mode-card" id="mode-card">
+    <div class="card-head">
+      <h2>模式</h2>
+      <button type="button" class="toggle" id="rules-toggle">规则与电源模式</button>
+    </div>
+    <div class="mode-layout">
+      <div class="mode-left">
+        <div class="tiles">
+          <div class="tile" id="t-normal"><b>普通</b><span>合盖 1 分钟后睡</span></div>
+          <div class="tile" id="t-run"><b>保持运行</b><span>跑实验、通勤：插电不睡，合盖继续跑</span></div>
+        </div>
+        <div class="runbar hidden" id="runbar">
+          <span class="left num" id="run-left"></span>
+          <span class="row"><span class="faint">时长</span><span class="chips" id="hours"></span></span>
+        </div>
+        <div class="alertbar hidden" id="forced-sleep-bar">
+          主动睡眠已触发：2 分钟内未入睡将自动休眠（开盖活动可中止）
+        </div>
+      </div>
+      <div class="rules-panel">
+        <dl class="kv" id="rules"></dl>
+        <div class="rules-foot">
+          <span>Esc 关闭 · F5 刷新</span>
+          <button type="button" class="text-btn" id="open-data-dir">打开数据目录</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card battery-card">
+    <div>
+      <div class="row spread">
+        <h2 style="margin:0">电池</h2>
+        <div class="read-actions">
+          <span class="read-wrap hidden" id="read-wrap">
+            <span class="read-badge num" id="read-at"></span>
+            <span class="read-tip">事件触发：插拔电、醒来、电量每变 5%、冲高到点</span>
+          </span>
+          <button type="button" class="mini-btn" id="b-refresh-ec" title="按需拉起 EC 任务刷新温度、功耗与阈值读数">刷新读数</button>
+        </div>
+      </div>
+      <div class="row" style="gap:1.1rem; margin-top:.6rem; align-items:flex-end">
+        <div class="big num" id="pct"></div>
+        <div style="padding-bottom:.25rem">
+          <div class="flow" id="flow"></div>
+          <div class="faint" id="hw"></div>
+        </div>
+      </div>
+      <div class="meter"><div class="fill" id="fill"></div><div class="band" id="band"><i id="band-label"></i></div></div>
+      <div class="scale num"><span>0</span><span>50</span><span>100</span></div>
+      <dl class="stats">
+        <div class="stat"><dt>电池温度</dt><dd class="num" id="s-temp">–</dd></div>
+        <div class="stat"><dt>整机功耗</dt><dd class="num" id="s-power">–</dd></div>
+        <div class="stat"><dt>充电电流</dt><dd class="num" id="s-ma">–</dd></div>
+        <div class="stat"><dt>最热传感器</dt><dd class="num" id="s-hot">–</dd></div>
+        <div class="stat wide">
+          <div class="pm-boxes">
+            <div class="pm-box" id="pm-ac"><span>插电</span><b id="pm-ac-v">–</b></div>
+            <div class="pm-box" id="pm-dc"><span>用电池</span><b id="pm-dc-v">–</b></div>
+          </div>
+        </div>
+      </dl>
+      <div class="note" id="note"></div>
+    </div>
+    <hr>
+
+    <div id="boost-off">
+      <div class="boost-head"><b>临时冲高</b><span class="faint">出门前多充一点，到时自动回到 75%–80%</span></div>
+      <div class="field">
+        <label>充到</label>
+        <div class="ctrl">
+          <div class="slider-row"><input type="range" id="r-target" min="85" max="100" step="1"><span class="slider-val num" id="v-target"></span></div>
+          <span class="chips" id="b-target"></span>
+        </div>
+      </div>
+      <div class="field">
+        <label>充到后插电保持</label>
+        <div class="ctrl">
+          <div class="slider-row"><input type="range" id="r-hold" min="15" max="180" step="5"><span class="slider-val num" id="v-hold"></span></div>
+          <span class="chips" id="b-hold"></span>
+        </div>
+      </div>
+      <div class="field">
+        <label>最长</label>
+        <div class="ctrl">
+          <div class="slider-row"><input type="range" id="r-max" min="1" max="12" step="0.5"><span class="slider-val num" id="v-max"></span></div>
+          <span class="chips" id="b-max"></span>
+        </div>
+      </div>
+      <div class="row spread" style="margin-top:.55rem">
+        <span class="faint">拔电出门也会回到 75%–80%</span>
+        <button class="btn" id="b-go">开始冲高</button>
+      </div>
+    </div>
+    <div id="boost-on" class="boosting hidden">
+      <div class="row spread"><b id="bo-title"></b><span class="faint num" id="bo-deadline"></span></div>
+      <div class="progress"><div id="bo-bar"></div></div>
+      <div class="faint" id="bo-text"></div>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let S = null;
+const pick = { target: null, hold: null, maxh: null };
+
+/* WebView2 JSON RPC bridge */
+let rpcSeq = 1;
+const rpcPending = new Map();
+function callHost(method, params) {
+  if (!window.chrome || !window.chrome.webview) {
+    return Promise.reject(new Error('WebView2 桥接不可用'));
+  }
+  const id = rpcSeq++;
+  return new Promise((resolve, reject) => {
+    rpcPending.set(id, { resolve, reject });
+    window.chrome.webview.postMessage({ id, method, params: params ?? {} });
+  });
+}
+
+if (window.chrome && window.chrome.webview) {
+  window.chrome.webview.addEventListener('message', ev => {
+    const msg = ev.data;
+    if (!msg) return;
+    if (msg.event === 'focus') {
+      refresh();
+      return;
+    }
+    if (msg.id != null && rpcPending.has(msg.id)) {
+      const { resolve, reject } = rpcPending.get(msg.id);
+      rpcPending.delete(msg.id);
+      if (msg.error) reject(new Error(msg.error));
+      else resolve(msg.result);
+    }
+  });
+}
+
+const api = {
+  get_state: () => callHost('get_state'),
+  set_mode: (mode, hours) => callHost('set_mode', { mode, hours }),
+  boost: (target, hold, maxh) => callHost('boost', { target, hold, maxh }),
+  refresh_ec: () => callHost('refresh_ec'),
+  open_data_dir: () => callHost('open_data_dir'),
+  start_agent: () => callHost('start_agent'),
+  set_expanded: expanded => callHost('set_expanded', { expanded }),
+  close_window: () => callHost('close_window'),
+  smoke_ready: () => callHost('smoke_ready'),
+};
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+function chips(el, values, current, fmt, onPick) {
+  el.innerHTML = '';
+  for (const v of values) {
+    const b = document.createElement('button');
+    b.className = 'chip num' + (v == current ? ' on' : '');
+    b.textContent = fmt(v);
+    b.onclick = () => onPick(v);
+    el.appendChild(b);
+  }
+}
+
+function formatLeftFromUtc(isoUtc) {
+  const ms = Date.parse(isoUtc) - Date.now();
+  if (Number.isNaN(ms) || ms <= 0) return '即将到期';
+  const s = Math.floor(ms / 1000);
+  return s >= 3600 ? `${Math.floor(s / 3600)} 小时 ${Math.floor((s % 3600) / 60)} 分` : `${Math.max(1, Math.floor(s / 60))} 分钟`;
+}
+
+function updateLiveCountdowns() {
+  if (!S || document.hidden) return;
+  if (S.mode.mode === 'run' && S.mode.run_until_utc) {
+    $('run-left').textContent = `还剩 ${formatLeftFromUtc(S.mode.run_until_utc)}，${S.mode.until} 回到普通`;
+  }
+  if (S.boost.active && S.boost.full_since_utc) {
+    const held = Math.max(0, Math.floor((Date.now() - Date.parse(S.boost.full_since_utc)) / 60000));
+    $('bo-bar').style.width = Math.min(100, 100 * held / Math.max(1, S.boost.hold)) + '%';
+    $('bo-text').textContent = `已充到，插着电保持 ${held}/${S.boost.hold} 分钟；拔电也会回到 75%–80%`;
+  }
+}
+
+function render(s) {
+  S = s;
+  // agent
+  $('agent').classList.toggle('off', !s.agent);
+  const drySuffix = s.dry_run ? ' (dry-run)' : '';
+  $('agent-text').textContent = (s.agent ? '常驻运行中' : '常驻没在运行') + drySuffix;
+  $('agent-start').classList.toggle('hidden', s.agent || s.dry_run);
+
+  // mode
+  const run = s.mode.mode === 'run';
+  $('t-normal').classList.toggle('on', !run);
+  $('t-run').classList.toggle('on', run);
+  $('runbar').classList.toggle('hidden', !run);
+  $('forced-sleep-bar').classList.toggle('hidden', !s.forced_sleep);
+  if (run) {
+    const leftText = s.mode.run_until_utc ? formatLeftFromUtc(s.mode.run_until_utc) : s.mode.left;
+    $('run-left').textContent = `还剩 ${leftText}，${s.mode.until} 回到普通`;
+  }
+  chips($('hours'), [2, 4, 8, 12, 24], s.mode.hours, v => `${v} 小时`, v => setMode('run', v));
+  const R = run
+    ? [['插电', '15 分钟关屏，不睡；合盖继续跑'], ['用电池', '5 分钟关屏，30 分钟没人操作才睡；电池到 40 °C 提前睡'],
+       ['睡不下去', '2 分钟后休眠（后台忙时只能休眠）']]
+    : [['合盖', '1 分钟后睡'], ['插电', '15 分钟关屏，1 小时睡'], ['用电池', '5 分钟关屏，15 分钟睡'],
+       ['睡不下去', '2 分钟后休眠（后台忙时只能休眠）']];
+  R.push(['电源模式', '插电 最佳性能；用电池 ≥ 50% 平衡、< 50% 最佳能效'],
+         ['电源键', '不起作用（睡着时按会唤醒）']);
+  $('rules').innerHTML = R.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+
+  // battery
+  const b = s.battery;
+  $('pct').innerHTML = b.pct == null ? '–' : `${b.pct}<small>%</small>`;
+  $('flow').textContent = b.flow;
+  $('read-at').textContent = b.read_at ? `上次更新：${b.read_at}` : '';
+  $('read-at').classList.toggle('stale', b.read_age_min != null && b.read_age_min >= 30);
+  $('read-wrap').classList.toggle('hidden', !b.read_at);
+  const [lo, hi] = b.band;
+  $('hw').textContent = b.hw
+    ? (b.hw[0] == lo && b.hw[1] == hi ? `充电区间 ${lo}%–${hi}%` : `充电区间 ${b.hw[0]}%–${b.hw[1]}%（应为 ${lo}%–${hi}%，下次运行改回）`)
+    : '充电区间还没读到';
+  const fill = $('fill');
+  fill.style.width = (b.pct ?? 0) + '%';
+  fill.style.background = (b.pct ?? 0) >= 50 ? 'var(--green)' : (b.pct ?? 0) >= 20 ? 'var(--amber)' : 'var(--red)';
+  const band = $('band');
+  band.style.left = lo + '%'; band.style.width = (hi - lo) + '%';
+  $('band-label').textContent = `${lo}–${hi}%`;
+  $('s-temp').textContent = b.temp != null ? `${b.temp.toFixed(1)} °C` : '–';
+  $('s-power').textContent = b.system_w != null ? `${b.system_w} W` : '–';
+  $('s-ma').textContent = b.charge_ma != null ? `${b.charge_ma} mA` : '–';
+  $('s-hot').textContent = b.hottest != null ? `${Math.round(b.hottest)} °C` : '–';
+  $('pm-ac-v').textContent = s.power_mode.ac;
+  $('pm-dc-v').textContent = s.power_mode.dc;
+  $('pm-ac').classList.toggle('on', !!b.ac);
+  $('pm-dc').classList.toggle('on', !b.ac);
+  const note = $('note');
+  note.textContent = b.slow ? '充得慢：机器热或功耗高时 EC 会压低充电电流，凉下来自动放开' : (b.last || '');
+  note.classList.toggle('warn', !!b.slow);
+
+  // boost
+  const bo = s.boost;
+  $('boost-on').classList.toggle('hidden', !bo.active);
+  $('boost-off').classList.toggle('hidden', bo.active);
+  if (bo.active) {
+    $('bo-title').textContent = `冲高到 ${bo.target}%`;
+    $('bo-deadline').textContent = bo.deadline ? `最迟 ${bo.deadline} 回落` : '';
+    if (bo.held != null) {
+      $('bo-bar').style.width = Math.min(100, 100 * bo.held / Math.max(1, bo.hold)) + '%';
+      $('bo-text').textContent = `已充到，插着电保持 ${bo.held}/${bo.hold} 分钟；拔电也会回到 75%–80%`;
+    } else {
+      $('bo-bar').style.width = Math.min(100, 100 * Math.max(0, (b.pct ?? 0) - lo) / Math.max(1, bo.target - lo)) + '%';
+      $('bo-text').textContent = `正在充（${b.pct ?? '–'}%），充到后插着电保持 ${bo.hold} 分钟；拔电也会回到 75%–80%`;
+    }
+  } else {
+    pick.target ??= s.boost_prefs.target;
+    pick.hold ??= s.boost_prefs.hold;
+    pick.maxh ??= s.boost_prefs.maxh;
+    renderBoostControls();
+  }
+}
+
+const BOOST_FIELDS = [
+  { key: 'target', range: 'r-target', val: 'v-target', chips: 'b-target', presets: [85, 90, 95, 100], fmt: v => `${v}%` },
+  { key: 'hold',   range: 'r-hold',   val: 'v-hold',   chips: 'b-hold',   presets: [30, 60, 120],     fmt: v => `${v} 分钟` },
+  { key: 'maxh',   range: 'r-max',    val: 'v-max',    chips: 'b-max',    presets: [2, 4, 8],         fmt: v => `${v} 小时` },
+];
+
+function renderBoostControls() {
+  for (const f of BOOST_FIELDS) {
+    const cur = pick[f.key];
+    const r = $(f.range);
+    if (Number(r.value) !== cur) r.value = cur;
+    $(f.val).textContent = f.fmt(cur);
+    chips($(f.chips), f.presets, cur, f.fmt, v => { pick[f.key] = v; renderBoostControls(); });
+  }
+}
+
+for (const f of BOOST_FIELDS) {
+  $(f.range).addEventListener('input', e => {
+    pick[f.key] = Number(e.target.value);
+    $(f.val).textContent = f.fmt(pick[f.key]);
+    [...$(f.chips).children].forEach((b, i) => b.classList.toggle('on', f.presets[i] === pick[f.key]));
+  });
+}
+
+let firstLoaded = false;
+async function refresh() {
+  try {
+    const state = await api.get_state();
+    if (!firstLoaded && state.rules_expanded) {
+      setExpandedUI(true);
+    }
+    render(state);
+    if (!firstLoaded) {
+      firstLoaded = true;
+      await api.smoke_ready();
+    }
+  } catch (err) {
+    toast(err.message || '读取状态失败');
+  }
+}
+
+async function setMode(mode, hours) {
+  try {
+    const r = await api.set_mode(mode, hours ?? S.mode.hours);
+    if (!r.ok) toast(r.msg || '切换模式失败');
+  } catch (err) {
+    toast(err.message || '切换模式失败');
+  }
+  await refresh();
+}
+
+let animatingUntil = 0;
+function setExpandedUI(on) {
+  $('mode-card').classList.toggle('expanded', on);
+  document.querySelector('main').classList.toggle('expanded', on);
+}
+$('rules-toggle').onclick = () => {
+  const on = !$('mode-card').classList.contains('expanded');
+  animatingUntil = Date.now() + 280;
+  setExpandedUI(on);
+  api.set_expanded(on).catch(() => {});
+};
+function syncExpandedByWidth() {
+  if (Date.now() < animatingUntil) return;
+  const wide = window.innerWidth >= 880;
+  if (wide !== $('mode-card').classList.contains('expanded')) setExpandedUI(wide);
+}
+window.addEventListener('resize', syncExpandedByWidth);
+$('t-normal').onclick = () => S && S.mode.mode !== 'normal' && setMode('normal');
+$('t-run').onclick = () => S && S.mode.mode !== 'run' && setMode('run');
+$('agent-start').onclick = async () => {
+  try {
+    const r = await api.start_agent();
+    if (!r.ok) toast(r.msg || '启动失败');
+  } catch (err) {
+    toast(err.message || '启动失败');
+  }
+  await refresh();
+};
+$('b-refresh-ec').onclick = async () => {
+  const btn = $('b-refresh-ec');
+  btn.disabled = true; btn.textContent = '刷新中…';
+  try {
+    const r = await api.refresh_ec();
+    toast(r.ok ? (r.msg || '已刷新 EC 读数') : (r.msg || '刷新失败'));
+  } catch (err) {
+    toast(err.message || '刷新失败');
+  } finally {
+    btn.disabled = false; btn.textContent = '刷新读数';
+  }
+  await refresh();
+};
+$('open-data-dir').onclick = async () => {
+  try {
+    const r = await api.open_data_dir();
+    if (!r.ok) toast(r.msg || '无法打开目录');
+  } catch (err) {
+    toast(err.message || '无法打开目录');
+  }
+};
+$('b-go').onclick = async () => {
+  const btn = $('b-go'); btn.disabled = true; btn.textContent = '正在写入 EC…';
+  try {
+    const r = await api.boost(pick.target, pick.hold, pick.maxh);
+    toast(r.ok ? (r.msg || `已开始冲高到 ${pick.target}%`) : (r.msg || '发起冲高失败'));
+  } catch (err) {
+    toast(err.message || '发起冲高失败');
+  } finally {
+    btn.disabled = false; btn.textContent = '开始冲高';
+  }
+  await refresh();
+};
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    api.close_window().catch(() => {});
+  } else if (e.key === 'F5') {
+    e.preventDefault();
+    refresh();
+  }
+});
+
+// 仅在窗口可见时本地重算剩余时间，零 IPC、零磁盘、零 EC 唤醒
+setInterval(updateLiveCountdowns, 30000);
+
+document.addEventListener('DOMContentLoaded', () => {
+  syncExpandedByWidth();
+  refresh();
+});
+window.addEventListener('focus', refresh);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+</script>
+</body>
+</html>
