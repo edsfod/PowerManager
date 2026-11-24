@@ -68,11 +68,11 @@
 
 目前 `ui` 与 `pmctl` 的设计集中归口在本节，不单独拆分子目录文档：
 
-- **界面宿主与标识**：`PowerManager.UI.exe` 由 `Microsoft.Web.WebView2` 挂载系统自带 WebView2 渲染单页前端；进程启动时主动调用 `SetCurrentProcessExplicitAppUserModelID('PowerManager')`，使任务栏图标与通知发送者标识一致；支持 `--debug` 参数开启开发者工具与 `--data-dir` 覆盖数据目录。
-- **状态读取**：界面与 `pmctl` 只读展示 `<DataDir>/agent/mode.json`（当前模式与到期时间）、`<DataDir>/battery-charge/state.json`（当前 EC 阈值、冲高倒计时与温度），以及直接读取非提权的当前电源模式（`powrprof`）与标准 `BatteryStatus`；界面用户偏好保存于 `<DataDir>/ui/prefs.json`。
+- **界面宿主与标识**：`PowerManager.UI.exe` 由 `Microsoft.Web.WebView2` 挂载系统自带 WebView2 渲染单页前端（用户数据目录隔离在 `<DataDir>/ui/webview2/`，不污染程序目录）；进程启动时主动调用 `SetCurrentProcessExplicitAppUserModelID('PowerManager')`，使任务栏图标与通知发送者标识一致；通过按管道名隔离的当前用户单实例 `Mutex`（`Local\PowerManager.UI.<pipeName>`）防止重复多开，再次启动时激活已有窗口；支持 `--debug`（开启开发者工具）、`--data-dir`、`--pipe-name`、`--dry-run` 与 `--smoke-test` 参数。
+- **状态读取**：界面与 `pmctl` 只读展示 `<DataDir>/agent/mode.json`（当前模式与到期时间）、`<DataDir>/battery-charge/state.json`（当前 EC 阈值、冲高倒计时与温度），以及直接读取非提权的当前电源模式（`powrprof`）与标准 `BatteryStatus`；界面用户偏好（保持运行时长、冲高参数、规则面板展开状态）保存于 `<DataDir>/ui/prefs.json`。
 - **跨进程通信（IPC）契约（[ADR-0006](adr/0006-csharp-architecture-ipc-and-data-dir.md)）**：界面与 `pmctl` 以普通权限运行，不直接修改系统设置，也不弹出 UAC 确认框：
-  - **`ui / pmctl ↔ agent`（同步 Named Pipe）**：`agent` 监听仅限当前用户 SID 访问的 Named Pipe（`\\.\pipe\PowerManager.Agent`），接收 JSON 命令（切换普通/保持运行模式、查询实时状态、执行 `--restore-original` 停用恢复），投递至主消息循环执行后同步返回结构化 JSON 回执（成功/失败原因）。
-  - **`agent / ui / pmctl → Battery-ChargeLimit`（原子请求文件 + 计划任务队列）**：调用方在 `<DataDir>/requests/` 目录先写临时文件再原子重命名为 `<utc-ticks>-<guid>.json`（携带触发原因或临时冲高参数：目标 `85%–100%`、保持 `15–180` 分钟、最长 `1–12` 小时；界面提供滑动条与快捷档位：目标 `85/90/95/100%`，保持 `30/60/120` 分钟默认 `60`，最长 `2/4/8` 小时默认 `4`），随后触发计划任务 `Battery-ChargeLimit`（由 `MultipleInstances=Queue` 保证串行执行）。提权任务消费请求时强制校验数值白名单边界并拒绝符号链接/重解析点，消费完毕即删除请求文件。
+  - **`ui / pmctl ↔ agent`（同步 Named Pipe）**：`agent` 监听仅限当前用户 SID 访问的 Named Pipe（`\\.\pipe\PowerManager.Agent`），接收 JSON 命令（切换普通/保持运行模式、查询实时状态含主动睡眠状态、执行 `--restore-original` 停用恢复），投递至主消息循环执行后同步返回结构化 JSON 回执（成功/失败原因）。
+  - **`agent / ui / pmctl → Battery-ChargeLimit`（原子请求文件 + 计划任务队列）**：调用方在 `<DataDir>/requests/` 目录先写临时文件再原子重命名为 `<utc-ticks>-<guid>.json`（携带按需刷新触发原因如 `ui-refresh`，或临时冲高参数：目标 `85%–100%`、保持 `15–180` 分钟、最长 `1–12` 小时；界面提供滑动条与快捷档位：目标 `85/90/95/100%`，保持 `30/60/120` 分钟默认 `60`，最长 `2/4/8` 小时默认 `4`，另提供按需刷新读数按钮，不进行后台轮询），随后触发计划任务 `Battery-ChargeLimit`（由 `MultipleInstances=Queue` 保证串行执行）。提权任务消费请求时强制校验数值白名单边界并拒绝符号链接/重解析点，消费完毕即删除请求文件。
 
 ---
 
@@ -88,7 +88,8 @@
 | `battery-charge/state.json` | 缓存 | 最新 EC 读数、冲高目标与保持计时状态 |
 | `battery-charge/ec.log` / `history.log` / `error.log` | 日志 | EC 阈值改写记录、每次运行的电量/功率/温度快照（UTC，`CHG-03`；`history.log` 超 1 MB 轮换 `.1`）与异常堆栈 |
 | `requests/*.json` | 瞬态 | 普通权限进程投递给 `Battery-ChargeLimit` 的原子 JSON 触发/冲高请求文件，消费后删除 |
-| `ui/prefs.json` | 持久 | 界面用户偏好 |
+| `ui/prefs.json` | 持久 | 界面用户偏好（保持运行时长、冲高默认参数、规则面板展开状态） |
+| `ui/webview2/` | 缓存 | WebView2 运行时用户数据目录（与可执行目录隔离） |
 
 ---
 

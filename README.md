@@ -22,28 +22,30 @@
 - **休眠兜底**：主动要求睡眠后 2 分钟仍未进入睡眠阶段（如后台高负载），或合盖状态下意外唤醒后 2 分钟仍未睡下（“保持运行 + 插电”除外），自动强制休眠。后台高负载时程序无法强制进入现代待机，仅能休眠；若此时需要真睡，请通过开始菜单点击“睡眠”。
 - **临时冲高**：可将上限临时调至 `85%–100%`，满足达标保持满设定时间（15–180 分钟）、拔电或超过最长兜底小时数（1–12 小时）后自动回落至 `75%–80%`。
 
-### 当前状态与目标命令行约定
+### 命令行约定（`pmctl.exe`）
 
-> 当前 `PowerManager-v2` 处于**文档体系与独立验证基线阶段**，主程序尚未迁入；按 [ADR-0005](docs/adr/0005-choose-csharp-framework-dependent.md) 与 [ADR-0006](docs/adr/0006-csharp-architecture-ipc-and-data-dir.md)，主程序将采用 **C#（.NET 10 SDK，Framework-Dependent）** 重写，运行时状态与日志默认存放于 `%LOCALAPPDATA%\PowerManager`（支持 `--data-dir` 覆盖）。
+主程序基于 **C#（.NET 10 SDK，Framework-Dependent）** 实现（[ADR-0005](docs/adr/0005-choose-csharp-framework-dependent.md)、[ADR-0006](docs/adr/0006-csharp-architecture-ipc-and-data-dir.md)），运行时状态与日志默认存放于 `%LOCALAPPDATA%\PowerManager`（支持 `--data-dir` 覆盖）。
 
 终端统一通过薄控制台命令 `pmctl.exe` 操作：
 - `pmctl status`：查看当前模式、系统电源设置、常驻状态与充电阈值状态（事件驱动下插电且电量不变时几小时不更新 EC 读数时间属正常现象）；
+- `pmctl mode normal` / `pmctl mode keep-running --hours 12`：切换模式；
 - `pmctl restore-original`：停用常驻并恢复 Windows 原始电源设置；
 - `pmctl boost 95 --hold-min 60 --max-hours 4`：发起单次临时冲高（`PowerManager.BatteryCharge.exe` 亦保留 `--status` 与 `--boost` 直接参数供管理员终端使用）。
 
 ---
 
-## 安装与依赖
+## 构建、安装与依赖
 
-- **主程序运行依赖（目标架构）**：Windows 11、`.NET 10 Desktop Runtime`（开发构建需 `.NET 10 SDK`）与系统自带 WebView2。
+- **主程序运行依赖**：Windows 11、`.NET 10 Desktop Runtime`（开发构建需 `.NET 10 SDK`）与系统自带 WebView2。
 - **独立验证脚本依赖（`scripts/`）**：Python 3.13（`verify_wmi_readonly.py` 另需 `comtypes`）。
-- **目标安装 / 卸载流程**：以管理员身份运行安装脚本（`install.ps1`）注册 `PowerManager-Agent` 与 `Battery-ChargeLimit` 计划任务（显式注入 `--data-dir`）、登记通知 `AppUserModelID` 与图标路径并生成桌面与开始菜单快捷方式 `PowerManager.lnk`（移动项目目录后需重新运行；从 v1 迁移时可通过 `-ImportOriginalFrom` 只读导入原 `original.json`）。卸载时先执行 `pmctl restore-original` 恢复 Windows 原电源设置，再运行安装脚本卸载参数移除计划任务、快捷方式与 `AppUserModelId` 注册表项。
+- **发布构建**：运行 `powershell -ExecutionPolicy Bypass -File scripts\publish.ps1`，将 4 个可执行文件（`PowerManager.Agent.exe`、`PowerManager.BatteryCharge.exe`、`PowerManager.UI.exe`、`pmctl.exe`）统一发布到 `dist/`（共享底层 DLL）。
+- **安装 / 卸载**：以管理员身份运行 `install.ps1` 注册 `PowerManager-Agent` 与 `Battery-ChargeLimit` 计划任务（显式注入展开后的 `--data-dir`）、登记通知 `AppUserModelID` 与图标路径并生成桌面与开始菜单快捷方式 `PowerManager.lnk`（移动项目目录后需重新运行；从 v1 迁移时可通过 `-ImportOriginalFrom` 只读导入原 `original.json`）。卸载时先执行 `pmctl restore-original` 恢复 Windows 原电源设置，再运行 `install.ps1 -Uninstall` 移除计划任务、快捷方式与 `AppUserModelId` 注册表项。
 
 ---
 
 ## 核验与测试
 
-- **主程序单元测试**：随 C# 工程落地后验证状态转移、闹钟计算、日志摘要与 `decide()` 等核心纯函数。
+- **主程序单元测试**：`dotnet test PowerManager.sln`（覆盖状态转移、闹钟计算、日志摘要、`decide()` 与 WMI 编解码等核心纯函数）。
 - **接口与文档独立校验（`scripts/`）**：
   - `python scripts/verify_power_boundaries.py check-s3`：核验系统 S0 / S3 睡眠支持状态；
   - `python scripts/verify_wmi_readonly.py`：只读核验 `BatteryStatus` 与（管理员下）EC WMI 传感器读数；
