@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3124.44" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 依赖方向约束（ADR-0006）：UI 仅引用 Core 与 Platform，严禁引用 Hardware.MateBook -->
+    <ProjectReference Include="..\PowerManager.Core\PowerManager.Core.csproj" />
+    <ProjectReference Include="..\PowerManager.Platform\PowerManager.Platform.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="web\index.html" LogicalName="PowerManager.UI.web.index.html" />
+    <EmbeddedResource Include="Assets\icon.ico" LogicalName="PowerManager.UI.Assets.icon.ico" />
+  </ItemGroup>
+
+  <!-- 本项目使用 WinForms 宿主，移除 WebView2 NuGet 自动注入的 WPF 程序集引用，避免 WindowsBase 版本冲突并精简发布产物 -->
+  <Target Name="RemoveUnusedWebView2Wpf" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+
+</Project>
