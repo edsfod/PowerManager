@@ -4,6 +4,13 @@
 
 ---
 
+## v2.1.0 — 2026-11-25（文档代码地图、核心模块拆分与集成测试加固）
+- **顶层架构地图（[ARCHITECTURE.md](ARCHITECTURE.md)）**：新增顶层代码地图、编译期依赖不变量、三条跨进程主链路及按修改场景的最小阅读清单，并在 [README.md](README.md) 与 [docs/conventions.md](docs/conventions.md) 登记职责边界。
+- **核心编排与 UI 模块拆分**：
+  - `PowerManager.Agent` 从 `AgentController` 抽离出 `AgentSystemActions`（系统副作用与 dry-run）、`AgentAlarmScheduler`（闹钟汇总与冲高回落到期判断）与 `WakeSummaryCoordinator`（离开记录与锁屏暂存补发 Toast）。
+  - `PowerManager.UI` 拆出 `UiModels`、`UiStateFormatter`（纯函数视图格式化）、`WebRpcBridge`（JSON-RPC 9 项桥接路由）、`WindowWidthAnimator`（DPI 尺寸与展开动画）及 `EmbeddedWebAssets`（内嵌静态资源拼装与 DWM 深浅色标题栏）；前端 `web/` 拆分为 `index.html`、`styles.css`、`mock.js`、`app.js`，零 Node 构建链，同时保留浏览器直接离线预览与单文件内嵌发布。
+- **UI 契约与 IPC 测试补齐**：规范前端 Fluent Design Tokens 与独立离线 Mock 预览；新增 Named Pipe 端到端回环与多客户端并发集成测试（单元测试总数增至 92 项）；补充 `.gitattributes` 统一行尾。
+
 ## v2.0.0 — 2026-11-24（C# .NET 10 重写完成并切换至生产）
 - **架构与 IPC 落地（[ADR-0006](docs/adr/0006-csharp-architecture-ipc-and-data-dir.md)）**：实现 `PowerManager.Core`、`PowerManager.Platform`、`PowerManager.Hardware.MateBook` 三层共享类库与 `PowerManager.Agent.exe`、`PowerManager.BatteryCharge.exe`、`PowerManager.UI.exe`、`pmctl.exe` 四个独立可执行文件；采用单用户 SID ACL Named Pipe（`UI / pmctl ↔ Agent`）与 `<DataDir>/requests/*.json` 原子白名单请求队列（`→ Battery-ChargeLimit` S4U 计划任务），运行时数据统一迁至 `%LOCALAPPDATA%\PowerManager`。
 - **交互与通知完善**：`PowerManager.UI` 基于 WinForms + WebView2 实现单实例防多开、按需刷新 EC 读数、主动睡眠状态提示、系统深浅色标题栏热切换、纯前端本地倒计时与数据目录快捷入口；WinRT Toast 补齐静音（`<audio silent="true"/>`）、`Tag`/`Group` 去重覆盖与圆形图标。
