@@ -66,14 +66,14 @@
 
 ## 四、 交互界面（`ui`）、命令行（`pmctl`）与跨进程通信
 
-本节聚焦 `ui` 与 `pmctl` 的**进程边界与跨进程通信契约**；交互界面子系统的独立需求、通用规范与实现设计归口于 [src/PowerManager.UI/docs/](../src/PowerManager.UI/docs/)（[requirements.md](../src/PowerManager.UI/docs/requirements.md)、[conventions.md](../src/PowerManager.UI/docs/conventions.md)、[design.md](../src/PowerManager.UI/docs/design.md)）：
+本节定义 `ui` 与 `pmctl` 的**进程边界与跨进程通信契约**；前端信息架构、窗口尺寸策略、草稿状态机与布局验收门禁见 [ui-design.md](ui-design.md)：
 
-- **界面宿主与标识**：`PowerManager.UI.exe` 由 `Microsoft.Web.WebView2` 挂载系统自带 WebView2 渲染单页前端（`web/index.html` 作为 `EmbeddedResource` 内嵌，用户数据目录隔离在 `<DataDir>/ui/webview2/`，不污染程序目录）；进程启动时主动调用 `SetCurrentProcessExplicitAppUserModelID('PowerManager')`，使任务栏图标与通知发送者标识一致；通过按管道名隔离的当前用户单实例 `Mutex`（`Local\PowerManager.UI.<pipeName>`）防止重复多开，再次启动时激活已有窗口；支持 `--debug`（开启开发者工具）、`--data-dir`、`--pipe-name`、`--dry-run` 与 `--smoke-test` 参数。
-- **前端桥接契约与独立预览**：宿主与前端之间通过 WebView2 JSON-RPC 通信——前端发送 `{ id, method, params }`，宿主回传 `{ id, result, error }`；窗口重新激活时宿主主动推送 `{ event: "focus" }` 触发刷新。桥接方法共 10 项：`get_state`（返回 `UiStateView` 状态快照）、`set_mode`（`mode`, `hours`）、`boost`（`target`, `hold`, `maxh`）、`refresh_ec`、`open_data_dir`、`start_agent`、`set_expanded`（`expanded`）、`set_content_height`（`height`，内容驱动窗口高度贴合）、`close_window`、`smoke_ready`（其余操作均返回 `UiActionResult { ok, msg? }`）。前端样式通过语义化 CSS Design Tokens（表面、文字、状态色、圆角、间距、动效）组织，且在无 `window.chrome.webview` 宿主环境时自动回落至内置 Mock 桥接，支持直接用浏览器打开 `web/index.html` 离线预览各运行态与主题切换。
-- **状态读取**：界面与 `pmctl` 只读展示 `<DataDir>/agent/mode.json`（当前模式与到期时间）、`<DataDir>/battery-charge/state.json`（当前 EC 阈值、冲高倒计时与温度），以及直接读取非提权的当前电源模式（`powrprof`）与标准 `BatteryStatus`；界面用户偏好（保持运行时长、冲高参数、规则面板展开状态）保存于 `<DataDir>/ui/prefs.json`。
+- **界面宿主与标识**：`PowerManager.UI.exe` 通过 `Microsoft.Web.WebView2` 加载内嵌静态前端（用户数据目录隔离于 `<DataDir>/ui/webview2/`）；启动时设置 `AppUserModelID = "PowerManager"` 并以按管道名隔离的单实例 `Mutex`（`Local\PowerManager.UI.<pipeName>`）防止重复多开（重复启动激活已有窗口）；支持 `--debug`、`--data-dir`、`--pipe-name`、`--dry-run` 与 `--smoke-test` 参数。
+- **前端桥接契约**：宿主与前端通过 WebView2 JSON-RPC 通信（前端 `{ id, method, params }` ↔ 宿主 `{ id, result, error }`），宿主在窗口激活与窗口态变化时分别推送 `{ event: "focus" }` 与 `{ event: "window_state", maximized }`。桥接方法共 10 项：`get_state`（返回 `UiStateView`）、`set_mode`（`mode`, `hours`）、`boost`（`target`, `hold`, `maxh`）、`refresh_ec`、`open_data_dir`、`start_agent`、`set_expanded`（`expanded`）、`set_content_height`（`height`）、`close_window`、`smoke_ready`（其余操作返回 `UiActionResult { ok, msg? }`）。
+- **状态读取**：界面与 `pmctl` 只读展示 `<DataDir>/agent/mode.json`、`<DataDir>/battery-charge/state.json`，以及非提权的当前电源模式（`powrprof`）与标准 `BatteryStatus`；界面用户偏好保存于 `<DataDir>/ui/prefs.json`。
 - **跨进程通信（IPC）契约（[ADR-0006](adr/0006-csharp-architecture-ipc-and-data-dir.md)）**：界面与 `pmctl` 以普通权限运行，不直接修改系统设置，也不弹出 UAC 确认框：
   - **`ui / pmctl ↔ agent`（同步 Named Pipe）**：`agent` 监听仅限当前用户 SID 访问的 Named Pipe（`\\.\pipe\PowerManager.Agent`），接收 JSON 命令（切换普通/保持运行模式、查询实时状态含主动睡眠状态、执行 `--restore-original` 停用恢复），投递至主消息循环执行后同步返回结构化 JSON 回执（成功/失败原因）。
-  - **`agent / ui / pmctl → Battery-ChargeLimit`（原子请求文件 + 计划任务队列）**：调用方在 `<DataDir>/requests/` 目录先写临时文件再原子重命名为 `<utc-ticks>-<guid>.json`（携带按需刷新触发原因如 `ui-refresh`，或临时冲高参数：目标 `85%–100%`、保持 `15–180` 分钟、最长 `1–12` 小时；界面提供滑动条与快捷档位：目标 `85/90/95/100%`，保持 `30/60/120` 分钟默认 `60`，最长 `2/4/8` 小时默认 `4`，另提供按需刷新读数按钮，不进行后台轮询），随后触发计划任务 `Battery-ChargeLimit`（由 `MultipleInstances=Queue` 保证串行执行）。提权任务消费请求时强制校验数值白名单边界并拒绝符号链接/重解析点，消费完毕即删除请求文件。
+  - **`agent / ui / pmctl → Battery-ChargeLimit`（原子请求文件 + 计划任务队列）**：调用方在 `<DataDir>/requests/` 目录先写临时文件再原子重命名为 `<utc-ticks>-<guid>.json`（携带按需刷新触发原因如 `ui-refresh`，或临时冲高参数：目标 `85%–100%`、保持 `15–180` 分钟、最长 `1–12` 小时），随后触发计划任务 `Battery-ChargeLimit`（由 `MultipleInstances=Queue` 保证串行执行）。提权任务消费请求时强制校验数值白名单边界并拒绝符号链接/重解析点，消费完毕即删除请求文件。
 
 ---
 
@@ -127,3 +127,5 @@
 | `NTF-01` | 开盖亮屏延后 15 秒查 `wevtapi`，解锁后通过 .NET 原生 WinRT Toast API 发通知 | `agent` | 合盖 >1 分钟开盖实测 + `agent.log` |
 | `NFR-01` | 常驻阻塞等待 Win32 事件 + 单一 Waitable Timer；EC 任务去定时化 | `agent` / `battery-charge` | 计划任务触发器检查 |
 | `NFR-02` | `ui` 整合模式切换与冲高控制，桌面与开始菜单统一 `PowerManager.lnk` | `ui` / `install.ps1` | 快捷方式与界面操作核验 |
+| `NFR-03` | 前端草稿编辑状态机（`runDraft` / `pick`）显式确认提交，未确认取消或关窗零 IPC | `ui` | 前端交互核验 + [ui-design.md](ui-design.md) |
+| `NFR-04` | 单实例 `Mutex`、DWM 深浅色热同步、`ResizeObserver` 内容贴合与 `window_state` 最大化自适应、`mock.js` 离线预览 | `ui` | [verify_ui_layout.py](../scripts/verify_ui_layout.py) + `--smoke-test` |

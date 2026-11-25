@@ -101,8 +101,10 @@ function renderModeSection() {
   const showRunbar = run || draftForNewRun;
 
   $('t-normal').classList.toggle('on', !run && !draftForNewRun);
+  $('t-normal').setAttribute('aria-checked', String(!run && !draftForNewRun));
   $('t-run').classList.toggle('on', run);
   $('t-run').classList.toggle('draft', draftForNewRun);
+  $('t-run').setAttribute('aria-checked', String(run || draftForNewRun));
   $('run-draft-badge').classList.toggle('hidden', !draftForNewRun);
 
   const runbar = $('runbar');
@@ -278,13 +280,16 @@ async function refresh() {
 }
 
 async function setMode(mode, hours) {
+  let ok = false;
   try {
     const r = await api.set_mode(mode, hours ?? S.mode.hours);
-    if (!r.ok) toast(r.msg || '切换模式失败');
+    ok = !!r.ok;
+    if (!ok) toast(r.msg || '切换模式失败');
   } catch (err) {
     toast(err.message || '切换模式失败');
   }
   await refresh();
+  return ok;
 }
 
 let animatingUntil = 0;
@@ -322,15 +327,21 @@ $('t-run').onclick = () => {
   if (!S || S.mode.mode === 'run') return;
   if (!runDraft.active) {
     runDraft.active = true;
-    runDraft.hours = S.mode.hours || 12;
+    runDraft.hours = S.mode.hours ?? 12;
     renderModeSection();
   }
 };
-$('r-hours').addEventListener('input', e => {
+const onRunHoursSliderPick = e => {
   if (!S) return;
   runDraft.active = true;
   runDraft.hours = Number(e.target.value);
   renderModeSection();
+};
+$('r-hours').addEventListener('input', onRunHoursSliderPick);
+$('r-hours').addEventListener('pointerdown', e => {
+  if (!S) return;
+  const curHours = runDraft.active && runDraft.hours != null ? runDraft.hours : S.mode.hours;
+  if (curHours === 0) onRunHoursSliderPick(e);
 });
 $('b-run-cancel').onclick = () => {
   runDraft.active = false;
@@ -343,10 +354,12 @@ $('b-run-confirm').onclick = async () => {
   const btn = $('b-run-confirm');
   btn.disabled = true;
   try {
-    await setMode('run', hours);
-    runDraft.active = false;
-    runDraft.hours = null;
-    renderModeSection();
+    const ok = await setMode('run', hours);
+    if (ok) {
+      runDraft.active = false;
+      runDraft.hours = null;
+      renderModeSection();
+    }
   } finally {
     btn.disabled = false;
   }

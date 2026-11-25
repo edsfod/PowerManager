@@ -10,11 +10,11 @@ window.createPowerManagerMockHost = function createPowerManagerMockHost(onRefres
     mode: { mode: 'normal', hours: 12, until: null, left: null, run_until_utc: null },
     power_mode: { ac: '最佳性能', dc: '平衡' },
     battery: {
-      pct: 78, ac: true, flow: '插着电，停在 75%–80%（保护电池）',
+      pct: 78, ac: true, flow: '接通电源 · 已到 80%，不再充',
       band: [75, 80], hw: [75, 80],
       temp: 29.4, system_w: 18, charge_ma: 0, hottest: 44,
       read_at: fmtHm(new Date()), read_age_min: 2, slow: false,
-      last: '上次睡眠：2 分钟（合盖 1 分钟 · 开盖唤醒 · 78%→78%）'
+      last: '上次冲高已回落：充到 95% 后插电保持满 60 分钟'
     },
     boost: { active: false },
     boost_prefs: { target: 95, hold: 60, maxh: 4 }
@@ -30,7 +30,7 @@ window.createPowerManagerMockHost = function createPowerManagerMockHost(onRefres
     state.battery.ac = true;
     state.battery.pct = 78;
     state.battery.read_age_min = 2;
-    state.battery.flow = '插着电，停在 75%–80%（保护电池）';
+    state.battery.flow = '接通电源 · 已到 80%，不再充';
     if (name === 'run') {
       const end = new Date(Date.now() + 4 * 3600 * 1000);
       state.mode = { mode: 'run', hours: 4, until: fmtHm(end), left: '4 小时 0 分', run_until_utc: end.toISOString() };
@@ -40,13 +40,13 @@ window.createPowerManagerMockHost = function createPowerManagerMockHost(onRefres
       state.battery.band = [90, 95];
       state.battery.hw = [90, 95];
       state.battery.charge_ma = 2400;
-      state.battery.flow = '正在充电（2400 mA）';
+      state.battery.flow = '接通电源 · 正在充电 36.5 W';
       state.boost = { active: true, target: 95, hold: 60, held: null, full_since_utc: null, deadline: fmtHm(end) };
     } else if (name === 'forced') {
       state.forced_sleep = true;
       state.battery.ac = false;
       state.battery.pct = 46;
-      state.battery.flow = '用电池中';
+      state.battery.flow = '使用电池 · 放电 11.2 W';
       state.power_mode.dc = '最佳能效';
     } else if (name === 'offline') {
       state.agent = false;

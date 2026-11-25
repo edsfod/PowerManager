@@ -114,16 +114,9 @@ internal sealed class WindowWidthAnimator : IDisposable
 
     public void AnimateTo(bool expanded)
     {
-        if (expanded)
+        if (_form.WindowState == FormWindowState.Maximized)
         {
-            if (_form.WindowState == FormWindowState.Maximized)
-            {
-                return;
-            }
-        }
-        else if (_form.WindowState == FormWindowState.Maximized)
-        {
-            _form.WindowState = FormWindowState.Normal;
+            return;
         }
 
         _workArea = Screen.FromControl(_form).WorkingArea;

@@ -103,7 +103,7 @@ public static class Program
     {
         if (args.Length < 2)
         {
-            Console.Error.WriteLine("用法: pmctl mode <normal|keep-running> [--hours 1..24]");
+            Console.Error.WriteLine("用法: pmctl mode <normal|keep-running> [--hours 0|1..24]");
             return 1;
         }
 
@@ -261,7 +261,7 @@ public static class Program
         Console.WriteLine("PowerManager 控制台工具 (pmctl)");
         Console.WriteLine("用法:");
         Console.WriteLine("  pmctl status [--data-dir <path>] [--pipe-name <name>]");
-        Console.WriteLine("  pmctl mode <normal|keep-running> [--hours 1..24] [--pipe-name <name>]");
+        Console.WriteLine("  pmctl mode <normal|keep-running> [--hours 0|1..24] [--pipe-name <name>]");
         Console.WriteLine("  pmctl boost <85..100> [--hold-min 60] [--max-hours 4] [--data-dir <path>] [--dry-run]");
         Console.WriteLine("  pmctl restore-original [--data-dir <path>] [--pipe-name <name>] [--dry-run]");
         Console.WriteLine("  pmctl paths [--data-dir <path>]");

@@ -9,7 +9,7 @@
 
 ## 用法
 
-通过桌面或开始菜单的 **PowerManager**（`PowerManager.lnk`）打开界面，可切换模式与发起单次临时冲高。平时处于“普通”模式；“保持运行”模式可定时 `2 / 4 / 8 / 12 / 24` 小时，到期自动切回普通模式。
+通过桌面或开始菜单的 **PowerManager**（`PowerManager.lnk`）打开界面，可切换模式与发起单次临时冲高。平时处于“普通”模式；“保持运行”模式可定时 `1–24` 小时（到期自动切回普通模式）或选择“直到手动改回”。
 
 | 行为 | 普通模式 | 保持运行模式（跑实验 / 通勤） |
 |---|---|---|
@@ -61,7 +61,7 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 顶层代码地图、项目依赖不变量、跨进程主链路与按任务最小阅读清单（改代码前首选入口） |
 | [docs/requirements.md](docs/requirements.md) | 外部可验收的功能与非功能需求（`SLP-*` / `PWR-*` / `CHG-*` / `NTF-*` / `NFR-*`） |
 | [docs/design.md](docs/design.md) | 系统架构分层、模块契约、状态持久化与需求追踪矩阵 |
-| [src/PowerManager.UI/docs/](src/PowerManager.UI/docs/) | UI 子系统自治文档（`requirements.md` / `conventions.md` / `design.md`） |
+| [docs/ui-design.md](docs/ui-design.md) | 交互界面布局、窗口尺寸策略、草稿状态机与布局验收门禁 |
 | [docs/conventions.md](docs/conventions.md) | 高内聚边界、去硬编码、接口验证与文档归类规范 |
 | [docs/adr/](docs/adr/) | 关键架构决策记录（单机型范围、休眠兜底、拒绝自适应充电、事件驱动迁移、C# 技术栈选型、多项目与 IPC/数据目录方案） |
 | [docs/reference/](docs/reference/) | 长期有效的硬件 WMI/EC 接口与 Windows 现代待机/Toast 机制参考 |

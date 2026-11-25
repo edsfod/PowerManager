@@ -21,7 +21,7 @@ internal sealed class WakeSummaryCoordinator
     private DateTimeOffset? _awayStartUtc;
     private int? _awayStartBattery;
     private (string Title, string Body)? _pendingUnlockToast;
-    private volatile bool _sessionLocked;
+    private bool _sessionLocked;
 
     public WakeSummaryCoordinator(
         RotatingUtcLogger log,
@@ -49,14 +49,20 @@ internal sealed class WakeSummaryCoordinator
         _awayNotes.Clear();
     }
 
-    public void OnSessionLocked() => _sessionLocked = true;
+    public void OnSessionLocked()
+    {
+        lock (_toastLock)
+        {
+            _sessionLocked = true;
+        }
+    }
 
     public void OnSessionUnlocked()
     {
-        _sessionLocked = false;
         (string Title, string Body)? pending;
         lock (_toastLock)
         {
+            _sessionLocked = false;
             pending = _pendingUnlockToast;
             _pendingUnlockToast = null;
         }
@@ -101,14 +107,21 @@ internal sealed class WakeSummaryCoordinator
 
                 _log.Info($"Wake summary: {summary.Title} | {summary.Body.Replace(Environment.NewLine, " / ")}");
 
-                if (_sessionLocked)
+                bool deferred;
+                lock (_toastLock)
                 {
-                    lock (_toastLock)
+                    if (_sessionLocked)
                     {
                         _pendingUnlockToast = (summary.Title, summary.Body);
+                        deferred = true;
+                    }
+                    else
+                    {
+                        deferred = false;
                     }
                 }
-                else
+
+                if (!deferred)
                 {
                     _sendToast(summary.Title, summary.Body, "wake");
                 }

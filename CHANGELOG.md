@@ -4,6 +4,17 @@
 
 ---
 
+## v2.1.2 — 2026-11-25（边界缺陷修复、UI 交互与语义分组优化、单文档树收敛）
+- **核心与交互缺陷修复**：
+  - 修复前端进入保持运行草稿时 `0`（直到手动改回）被 `||` 误判回退为 `12` 小时的问题，以及 `set_mode` 失败时仍清空草稿、选中“直到手动改回”后直接点滑条原值不触发切换的边界问题。
+  - 修复 CLI 切定时保持运行而 UI 偏好为 `0` 时滑条误显“直到手动改回”的问题（[UiStateFormatter.cs](src/PowerManager.UI/UiStateFormatter.cs) 优先由 `RunUntilUtc - ChangedAtUtc` 推导当前时长）。
+  - 修复 [WakeSummaryCoordinator.cs](src/PowerManager.Agent/WakeSummaryCoordinator.cs) 中锁屏标志与待补发 Toast 之间的微小锁竞态。
+  - 补齐 `pmctl mode` 用法提示中的 `0` 选项及 `WebRpcBridge` / `ARCHITECTURE.md` 中的 10 项 RPC 计数。
+- **UI 体验与代码对齐**：
+  - 宽屏（`>= 880px`）与最大化态隐藏规则折叠按钮且不再强行退出最大化；移除最大化态 `vh` 压缩/拉伸字号，全程保持固定基准字号跟随 Windows DPI。
+  - 将 6 项电池指标按语义分为 **EC 硬件遥测（4 项：`2×2`/`4×1`）** 与 **Windows 电源模式（2 项：`2×1`）**；模式切换卡片改为语义 `<button role="radio">` 并补齐键盘焦点轮廓；清理 `styles.css` 未使用 Token 并让组件统一消费语义 Token；对齐 `mock.js` 文案与真实后端 `UiStateFormatter`。
+- **文档体系收敛**：移除 `src/PowerManager.UI/docs/` 平行三件套，收敛为单一精简文档 [docs/ui-design.md](docs/ui-design.md)；在 [docs/requirements.md](docs/requirements.md) 新增 `NFR-03`、`NFR-04` 并纳入 [docs/design.md](docs/design.md) 与 `verify_doc_traceability.py`（21/21 双向追踪通过）。
+
 ## v2.1.1 — 2026-11-25（UI 子系统自治文档三件套、内容驱动窗口与对称布局、保持运行滑条与“直到手动改回”）
 - **UI 子系统自治文档（`src/PowerManager.UI/docs/`）**：新增与顶层 `docs/` 严格对称的 `requirements.md`（`UI-01`–`UI-08`）、`conventions.md`（谨慎硬编码、单向尺寸所有权、视觉焦点唯一、安全放弃、空间对称与双门禁验收）与 `design.md`（布局架构、草稿状态机与需求追踪矩阵），同步更新顶层文档导航与契约链接。
 - **内容驱动窗口与最大化识别**：移除自由窗口的硬编码业务高度与 `vh` 字号循环，通过 `ResizeObserver` → `set_content_height` RPC 与垂直中心锚点实现对称贴合及切换还原原位，并以 `scrollbar-gutter: stable` 消除点击左右抖动；新增 `window_state` 事件识别最大化态，按视口比例缩放并垂直居中。

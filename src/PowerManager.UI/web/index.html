@@ -20,12 +20,12 @@
     </div>
     <div class="mode-layout">
       <div class="mode-left">
-        <div class="tiles">
-          <div class="tile" id="t-normal"><b>普通</b><span>合盖 1 分钟后睡</span></div>
-          <div class="tile" id="t-run">
+        <div class="tiles" role="radiogroup" aria-label="运行模式">
+          <button type="button" class="tile" id="t-normal" role="radio" aria-checked="false"><b>普通</b><span>合盖 1 分钟后睡</span></button>
+          <button type="button" class="tile" id="t-run" role="radio" aria-checked="false">
             <div class="tile-head"><b>保持运行</b><span class="draft-badge hidden" id="run-draft-badge">待确认</span></div>
             <span>跑实验、通勤：插电不睡，合盖继续跑</span>
-          </div>
+          </button>
         </div>
       </div>
       <div class="rules-panel">
@@ -79,13 +79,15 @@
       </div>
       <div class="meter"><div class="fill" id="fill"></div><div class="band" id="band"><i id="band-label"></i></div></div>
       <div class="scale num"><span>0</span><span>50</span><span>100</span></div>
-      <dl class="stats">
+      <dl class="stats telemetry-stats">
         <div class="stat"><dt>电池温度</dt><dd class="num" id="s-temp">–</dd></div>
         <div class="stat"><dt>整机功耗</dt><dd class="num" id="s-power">–</dd></div>
         <div class="stat"><dt>充电电流</dt><dd class="num" id="s-ma">–</dd></div>
         <div class="stat"><dt>最热传感器</dt><dd class="num" id="s-hot">–</dd></div>
-        <div class="stat pm-stat" id="pm-ac"><dt>插电</dt><dd id="pm-ac-v">–</dd></div>
-        <div class="stat pm-stat" id="pm-dc"><dt>用电池</dt><dd id="pm-dc-v">–</dd></div>
+      </dl>
+      <dl class="stats pm-stats">
+        <div class="stat pm-stat" id="pm-ac"><dt>插电电源模式</dt><dd id="pm-ac-v">–</dd></div>
+        <div class="stat pm-stat" id="pm-dc"><dt>电池电源模式</dt><dd id="pm-dc-v">–</dd></div>
       </dl>
       <div class="note" id="note"></div>
     </div>

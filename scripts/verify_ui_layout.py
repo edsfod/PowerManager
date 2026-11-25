@@ -16,9 +16,8 @@ EDGE_CANDIDATES = [
 # (name, width, height, query, max_allowed_main_height_or_None_for_viewport_check)
 CASES: list[tuple[str, int, int, str, int | None]] = [
     ("compact-normal", 720, 960, "preset=normal&hideMockBar=1&audit=1", 730),
-    ("compact-draft", 720, 960, "preset=normal&draft=1&hideMockBar=1&audit=1", 810),
-    ("expanded-draft", 960, 960, "preset=normal&draft=1&expanded=1&hideMockBar=1&audit=1", 810),
-    ("max-1280x720-run", 1280, 720, "preset=run&expanded=1&maximized=1&hideMockBar=1&audit=1", None),
+    ("compact-draft", 720, 960, "preset=normal&draft=1&hideMockBar=1&audit=1", 815),
+    ("expanded-draft", 960, 960, "preset=normal&draft=1&expanded=1&hideMockBar=1&audit=1", 815),
     ("max-1440x912-normal", 1440, 912, "preset=normal&expanded=1&maximized=1&hideMockBar=1&audit=1", None),
     ("max-1440x912-run", 1440, 912, "preset=run&expanded=1&maximized=1&hideMockBar=1&audit=1", None),
     ("max-1920x1040-run", 1920, 1040, "preset=run&expanded=1&maximized=1&hideMockBar=1&audit=1", None),

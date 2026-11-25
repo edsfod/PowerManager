@@ -32,7 +32,13 @@ internal static partial class UiStateFormatter
                 string left = totalSec >= 3600
                     ? $"{totalSec / 3600} 小时 {(totalSec % 3600) / 60} 分"
                     : $"{Math.Max(1, totalSec / 60)} 分钟";
-                return new UiModeView("run", resolvedHours, untilLocal.ToString("HH:mm"), left, modeState.RunUntilUtc.Value.ToString("O"));
+                int activeHours = modeState.RunUntilUtc.Value > modeState.ChangedAtUtc
+                    ? Math.Clamp(
+                        (int)Math.Round((modeState.RunUntilUtc.Value - modeState.ChangedAtUtc).TotalHours),
+                        PowerPolicy.KeepRunningMinHours,
+                        PowerPolicy.KeepRunningMaxHours)
+                    : (resolvedHours > 0 ? resolvedHours : PowerPolicy.KeepRunningDefaultHours);
+                return new UiModeView("run", activeHours, untilLocal.ToString("HH:mm"), left, modeState.RunUntilUtc.Value.ToString("O"));
             }
         }
 

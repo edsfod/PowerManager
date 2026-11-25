@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace PowerManager.UI;
 
 /// <summary>
-/// WebView2 前端与宿主之间的 JSON-RPC 路由器（9 项桥接方法契约见 docs/design.md §四）。
+/// WebView2 前端与宿主之间的 JSON-RPC 路由器（10 项桥接方法契约见 docs/design.md §四）。
 /// </summary>
 internal sealed class WebRpcBridge
 {
