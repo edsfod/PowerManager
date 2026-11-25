@@ -49,7 +49,8 @@
 - **接口与文档独立校验（`scripts/`）**：
   - `python scripts/verify_power_boundaries.py check-s3`：核验系统 S0 / S3 睡眠支持状态；
   - `python scripts/verify_wmi_readonly.py`：只读核验 `BatteryStatus` 与（管理员下）EC WMI 传感器读数；
-  - `python scripts/verify_doc_traceability.py`：校验需求文档与设计追踪矩阵的 100% 双向匹配。
+  - `python scripts/verify_doc_traceability.py`：校验需求文档与设计追踪矩阵的 100% 双向匹配；
+  - `python scripts/verify_ui_layout.py`：使用系统 Edge 无头模式校验 UI 各视口零垂直溢出与固有高度合理性。
 
 ---
 
@@ -60,6 +61,7 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 顶层代码地图、项目依赖不变量、跨进程主链路与按任务最小阅读清单（改代码前首选入口） |
 | [docs/requirements.md](docs/requirements.md) | 外部可验收的功能与非功能需求（`SLP-*` / `PWR-*` / `CHG-*` / `NTF-*` / `NFR-*`） |
 | [docs/design.md](docs/design.md) | 系统架构分层、模块契约、状态持久化与需求追踪矩阵 |
+| [src/PowerManager.UI/docs/](src/PowerManager.UI/docs/) | UI 子系统自治文档（`requirements.md` / `conventions.md` / `design.md`） |
 | [docs/conventions.md](docs/conventions.md) | 高内聚边界、去硬编码、接口验证与文档归类规范 |
 | [docs/adr/](docs/adr/) | 关键架构决策记录（单机型范围、休眠兜底、拒绝自适应充电、事件驱动迁移、C# 技术栈选型、多项目与 IPC/数据目录方案） |
 | [docs/reference/](docs/reference/) | 长期有效的硬件 WMI/EC 接口与 Windows 现代待机/Toast 机制参考 |

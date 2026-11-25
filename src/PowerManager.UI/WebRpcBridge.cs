@@ -16,17 +16,20 @@ internal sealed class WebRpcBridge
 
     private readonly UiBackendService _backend;
     private readonly Action<bool> _onSetExpanded;
+    private readonly Action<double> _onSetContentHeight;
     private readonly Action _onCloseWindow;
     private readonly Action _onSmokeReady;
 
     public WebRpcBridge(
         UiBackendService backend,
         Action<bool> onSetExpanded,
+        Action<double> onSetContentHeight,
         Action onCloseWindow,
         Action onSmokeReady)
     {
         _backend = backend;
         _onSetExpanded = onSetExpanded;
+        _onSetContentHeight = onSetContentHeight;
         _onCloseWindow = onCloseWindow;
         _onSmokeReady = onSmokeReady;
     }
@@ -93,6 +96,17 @@ internal sealed class WebRpcBridge
                     bool expanded = req.Params?.GetBoolOrDefault("expanded") ?? false;
                     _backend.SaveRulesExpandedPref(expanded);
                     _onSetExpanded(expanded);
+                    result = new UiActionResult(true);
+                    break;
+                }
+
+                case "set_content_height":
+                {
+                    double? height = req.Params?.GetDoubleOrDefault("height");
+                    if (height is > 0)
+                    {
+                        _onSetContentHeight(height.Value);
+                    }
                     result = new UiActionResult(true);
                     break;
                 }

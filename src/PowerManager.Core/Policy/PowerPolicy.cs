@@ -26,7 +26,10 @@ public static class PowerPolicy
     public static readonly int[] BoostHoldMinutesPresets = [30, 60, 120];
     public static readonly double[] BoostMaxHoursPresets = [2.0, 4.0, 8.0];
 
-    // --- 保持运行可选时长（SLP-02） ---
+    // --- 保持运行可选时长与界面快捷档位（SLP-02；0 表示直到手动改回） ---
+    public const int KeepRunningIndefiniteHours = 0;
+    public const int KeepRunningMinHours = 1;
+    public const int KeepRunningMaxHours = 24;
     public static readonly int[] KeepRunningDurationHoursOptions = [2, 4, 8, 12, 24];
     public const int KeepRunningDefaultHours = 12;
 

@@ -10,9 +10,11 @@ internal sealed class MainForm : Form
     private readonly AppPaths _paths;
     private readonly bool _debug;
     private readonly bool _smokeTest;
+    private readonly bool _initialExpanded;
     private readonly WebView2 _webView;
     private readonly WindowWidthAnimator _widthAnimator;
     private readonly WebRpcBridge _rpcBridge;
+    private bool _lastMaximized;
 
     public bool SmokeTestPassed { get; private set; }
 
@@ -21,6 +23,7 @@ internal sealed class MainForm : Form
         _paths = paths;
         _debug = debug;
         _smokeTest = smokeTest;
+        _initialExpanded = backend.GetRulesExpandedPref();
 
         bool dark = EmbeddedWebAssets.IsSystemDarkMode();
         Color bg = EmbeddedWebAssets.GetThemeBackground(dark);
@@ -32,11 +35,12 @@ internal sealed class MainForm : Form
         Icon = EmbeddedWebAssets.LoadEmbeddedIcon();
 
         _widthAnimator = new WindowWidthAnimator(this);
-        _widthAnimator.ApplyInitialBounds(expanded: backend.GetRulesExpandedPref());
+        _widthAnimator.ApplyInitialBounds(expanded: _initialExpanded);
 
         _rpcBridge = new WebRpcBridge(
             backend,
             onSetExpanded: _widthAnimator.AnimateTo,
+            onSetContentHeight: _widthAnimator.ApplyContentHeight,
             onCloseWindow: () => BeginInvoke(Close),
             onSmokeReady: () =>
             {
@@ -57,6 +61,7 @@ internal sealed class MainForm : Form
 
         Shown += OnFormShownAsync;
         Activated += OnFormActivated;
+        SizeChanged += OnFormSizeChanged;
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
 
@@ -64,6 +69,7 @@ internal sealed class MainForm : Form
     {
         base.OnHandleCreated(e);
         EmbeddedWebAssets.ApplyTitleBarTheme(Handle, EmbeddedWebAssets.IsSystemDarkMode());
+        _widthAnimator.ApplyInitialBounds(expanded: _initialExpanded);
     }
 
     protected override void Dispose(bool disposing)
@@ -120,6 +126,7 @@ internal sealed class MainForm : Form
             settings.IsZoomControlEnabled = false;
 
             _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+            _webView.CoreWebView2.NavigationCompleted += (_, _) => PostWindowState();
             _webView.CoreWebView2.NavigateToString(EmbeddedWebAssets.BuildInlineHtml());
 
             if (_smokeTest)
@@ -154,6 +161,29 @@ internal sealed class MainForm : Form
         if (_webView.CoreWebView2 is not null)
         {
             _webView.CoreWebView2.PostWebMessageAsJson("{\"event\":\"focus\"}");
+        }
+    }
+
+    private void OnFormSizeChanged(object? sender, EventArgs e)
+    {
+        bool maximized = WindowState == FormWindowState.Maximized;
+        if (maximized != _lastMaximized)
+        {
+            _lastMaximized = maximized;
+            PostWindowState();
+        }
+    }
+
+    private void PostWindowState()
+    {
+        if (_webView.CoreWebView2 is not null && !IsDisposed)
+        {
+            bool maximized = WindowState == FormWindowState.Maximized;
+            _lastMaximized = maximized;
+            _webView.CoreWebView2.PostWebMessageAsJson(
+                maximized
+                    ? "{\"event\":\"window_state\",\"maximized\":true}"
+                    : "{\"event\":\"window_state\",\"maximized\":false}");
         }
     }
 

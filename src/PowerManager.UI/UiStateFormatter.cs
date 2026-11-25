@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using PowerManager.Core.Logic;
 using PowerManager.Core.Models;
 using PowerManager.Core.Policy;
 
@@ -13,20 +14,26 @@ internal static partial class UiStateFormatter
 
     public static UiModeView BuildModeView(ModeState modeState, int prefHours, DateTimeOffset nowUtc)
     {
-        int resolvedHours = PowerPolicy.KeepRunningDurationHoursOptions.Contains(prefHours)
+        int resolvedHours = PowerModeCalculator.IsValidKeepRunningDuration(prefHours)
             ? prefHours
             : PowerPolicy.KeepRunningDefaultHours;
 
-        if (modeState.ParsedMode == AgentMode.KeepRunning &&
-            modeState.RunUntilUtc.HasValue &&
-            modeState.RunUntilUtc.Value > nowUtc)
+        if (modeState.ParsedMode == AgentMode.KeepRunning)
         {
-            var untilLocal = modeState.RunUntilUtc.Value.ToLocalTime();
-            int totalSec = (int)(modeState.RunUntilUtc.Value - nowUtc).TotalSeconds;
-            string left = totalSec >= 3600
-                ? $"{totalSec / 3600} 小时 {(totalSec % 3600) / 60} 分"
-                : $"{Math.Max(1, totalSec / 60)} 分钟";
-            return new UiModeView("run", resolvedHours, untilLocal.ToString("HH:mm"), left, modeState.RunUntilUtc.Value.ToString("O"));
+            if (!modeState.RunUntilUtc.HasValue)
+            {
+                return new UiModeView("run", PowerPolicy.KeepRunningIndefiniteHours, null, null, null);
+            }
+
+            if (modeState.RunUntilUtc.Value > nowUtc)
+            {
+                var untilLocal = modeState.RunUntilUtc.Value.ToLocalTime();
+                int totalSec = (int)(modeState.RunUntilUtc.Value - nowUtc).TotalSeconds;
+                string left = totalSec >= 3600
+                    ? $"{totalSec / 3600} 小时 {(totalSec % 3600) / 60} 分"
+                    : $"{Math.Max(1, totalSec / 60)} 分钟";
+                return new UiModeView("run", resolvedHours, untilLocal.ToString("HH:mm"), left, modeState.RunUntilUtc.Value.ToString("O"));
+            }
         }
 
         return new UiModeView("normal", resolvedHours, null, null, null);

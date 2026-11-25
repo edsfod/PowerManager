@@ -1,6 +1,8 @@
 const $ = id => document.getElementById(id);
 let S = null;
 const pick = { target: null, hold: null, maxh: null };
+const RUN_HOUR_PRESETS = [2, 4, 8, 12, 24, 0];
+const runDraft = { active: false, hours: null };
 
 /* WebView2 JSON-RPC bridge with standalone browser Mock fallback */
 const hasWebViewHost = !!(window.chrome && window.chrome.webview);
@@ -31,6 +33,15 @@ if (hasWebViewHost) {
       refresh();
       return;
     }
+    if (msg.event === 'window_state') {
+      const max = !!msg.maximized;
+      document.documentElement.dataset.windowState = max ? 'maximized' : 'normal';
+      if (!max) {
+        lastReportedHeight = 0;
+        scheduleContentHeightSync();
+      }
+      return;
+    }
     if (msg.id != null && rpcPending.has(msg.id)) {
       const { resolve, reject } = rpcPending.get(msg.id);
       rpcPending.delete(msg.id);
@@ -48,6 +59,7 @@ const api = {
   open_data_dir: () => callHost('open_data_dir'),
   start_agent: () => callHost('start_agent'),
   set_expanded: expanded => callHost('set_expanded', { expanded }),
+  set_content_height: height => callHost('set_content_height', { height }),
   close_window: () => callHost('close_window'),
   smoke_ready: () => callHost('smoke_ready'),
 };
@@ -75,10 +87,85 @@ function formatLeftFromUtc(isoUtc) {
   return s >= 3600 ? `${Math.floor(s / 3600)} 小时 ${Math.floor((s % 3600) / 60)} 分` : `${Math.max(1, Math.floor(s / 60))} 分钟`;
 }
 
+function formatEndHmAfterHours(hours) {
+  const d = new Date(Date.now() + hours * 3600 * 1000);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function renderModeSection() {
+  if (!S) return;
+  const run = S.mode.mode === 'run';
+  const draftForNewRun = !run && runDraft.active;
+  const draftHours = runDraft.active && runDraft.hours != null ? runDraft.hours : S.mode.hours;
+  const draftForEdit = run && runDraft.active && draftHours !== S.mode.hours;
+  const showRunbar = run || draftForNewRun;
+
+  $('t-normal').classList.toggle('on', !run && !draftForNewRun);
+  $('t-run').classList.toggle('on', run);
+  $('t-run').classList.toggle('draft', draftForNewRun);
+  $('run-draft-badge').classList.toggle('hidden', !draftForNewRun);
+
+  const runbar = $('runbar');
+  runbar.classList.toggle('hidden', !showRunbar);
+  runbar.classList.toggle('draft', draftForNewRun || draftForEdit);
+  $('forced-sleep-bar').classList.toggle('hidden', !S.forced_sleep);
+
+  if (showRunbar) {
+    const isIndefinite = draftHours === 0;
+    const activeIndefinite = run && !S.mode.run_until_utc;
+    const endPreview = isIndefinite ? null : formatEndHmAfterHours(draftHours);
+    if (draftForNewRun) {
+      $('run-left').textContent = isIndefinite
+        ? '待确认：保持运行，直到手动改回'
+        : `待确认：保持运行 ${draftHours} 小时（预计 ${endPreview} 回到普通）`;
+      $('b-run-confirm').textContent = '确认';
+      $('run-actions').classList.remove('hidden');
+    } else if (draftForEdit) {
+      const curText = activeIndefinite
+        ? '保持运行中'
+        : `还剩 ${S.mode.run_until_utc ? formatLeftFromUtc(S.mode.run_until_utc) : S.mode.left}`;
+      $('run-left').textContent = isIndefinite
+        ? `${curText}（待确认：改为直到手动改回）`
+        : `${curText}（待确认：改为 ${draftHours} 小时，约 ${endPreview} 回到普通）`;
+      $('b-run-confirm').textContent = '确认';
+      $('run-actions').classList.remove('hidden');
+    } else {
+      if (activeIndefinite) {
+        $('run-left').textContent = '保持运行中，直到手动改回';
+      } else {
+        const leftText = S.mode.run_until_utc ? formatLeftFromUtc(S.mode.run_until_utc) : S.mode.left;
+        $('run-left').textContent = `还剩 ${leftText}，${S.mode.until} 回到普通`;
+      }
+      $('run-actions').classList.add('hidden');
+    }
+
+    const r = $('r-hours');
+    const sliderRow = r.closest('.slider-row');
+    if (sliderRow) sliderRow.classList.toggle('muted-slider', isIndefinite);
+    if (!isIndefinite && Number(r.value) !== draftHours) r.value = draftHours;
+    $('v-hours').textContent = isIndefinite ? '直到手动改回' : `${draftHours} 小时`;
+    chips($('hours'), RUN_HOUR_PRESETS, draftHours, v => (v === 0 ? '直到手动改回' : `${v} 小时`), v => {
+      runDraft.active = true;
+      runDraft.hours = v;
+      renderModeSection();
+    });
+  }
+
+  const showRunRules = run || draftForNewRun;
+  const R = showRunRules
+    ? [['插电', '15 分钟关屏，不睡；合盖继续跑'], ['用电池', '5 分钟关屏，30 分钟没人操作才睡；电池到 40 °C 提前睡'],
+       ['睡不下去', '2 分钟后休眠（后台忙时只能休眠）']]
+    : [['合盖', '1 分钟后睡'], ['插电', '15 分钟关屏，1 小时睡'], ['用电池', '5 分钟关屏，15 分钟睡'],
+       ['睡不下去', '2 分钟后休眠（后台忙时只能休眠）']];
+  R.push(['电源模式', '插电 最佳性能；用电池 ≥ 50% 平衡、< 50% 最佳能效'],
+         ['电源键', '不起作用（睡着时按会唤醒）']);
+  $('rules').innerHTML = R.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+}
+
 function updateLiveCountdowns() {
   if (!S || document.hidden) return;
   if (S.mode.mode === 'run' && S.mode.run_until_utc) {
-    $('run-left').textContent = `还剩 ${formatLeftFromUtc(S.mode.run_until_utc)}，${S.mode.until} 回到普通`;
+    renderModeSection();
   }
   if (S.boost.active && S.boost.full_since_utc) {
     const held = Math.max(0, Math.floor((Date.now() - Date.parse(S.boost.full_since_utc)) / 60000));
@@ -96,24 +183,7 @@ function render(s) {
   $('agent-start').classList.toggle('hidden', s.agent || s.dry_run);
 
   // mode
-  const run = s.mode.mode === 'run';
-  $('t-normal').classList.toggle('on', !run);
-  $('t-run').classList.toggle('on', run);
-  $('runbar').classList.toggle('hidden', !run);
-  $('forced-sleep-bar').classList.toggle('hidden', !s.forced_sleep);
-  if (run) {
-    const leftText = s.mode.run_until_utc ? formatLeftFromUtc(s.mode.run_until_utc) : s.mode.left;
-    $('run-left').textContent = `还剩 ${leftText}，${s.mode.until} 回到普通`;
-  }
-  chips($('hours'), [2, 4, 8, 12, 24], s.mode.hours, v => `${v} 小时`, v => setMode('run', v));
-  const R = run
-    ? [['插电', '15 分钟关屏，不睡；合盖继续跑'], ['用电池', '5 分钟关屏，30 分钟没人操作才睡；电池到 40 °C 提前睡'],
-       ['睡不下去', '2 分钟后休眠（后台忙时只能休眠）']]
-    : [['合盖', '1 分钟后睡'], ['插电', '15 分钟关屏，1 小时睡'], ['用电池', '5 分钟关屏，15 分钟睡'],
-       ['睡不下去', '2 分钟后休眠（后台忙时只能休眠）']];
-  R.push(['电源模式', '插电 最佳性能；用电池 ≥ 50% 平衡、< 50% 最佳能效'],
-         ['电源键', '不起作用（睡着时按会唤醒）']);
-  $('rules').innerHTML = R.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  renderModeSection();
 
   // battery
   const b = s.battery;
@@ -234,8 +304,53 @@ function syncExpandedByWidth() {
   if (wide !== $('mode-card').classList.contains('expanded')) setExpandedUI(wide);
 }
 window.addEventListener('resize', syncExpandedByWidth);
-$('t-normal').onclick = () => S && S.mode.mode !== 'normal' && setMode('normal');
-$('t-run').onclick = () => S && S.mode.mode !== 'run' && setMode('run');
+$('t-normal').onclick = () => {
+  if (!S) return;
+  if (S.mode.mode === 'normal') {
+    if (runDraft.active) {
+      runDraft.active = false;
+      runDraft.hours = null;
+      renderModeSection();
+    }
+    return;
+  }
+  runDraft.active = false;
+  runDraft.hours = null;
+  setMode('normal');
+};
+$('t-run').onclick = () => {
+  if (!S || S.mode.mode === 'run') return;
+  if (!runDraft.active) {
+    runDraft.active = true;
+    runDraft.hours = S.mode.hours || 12;
+    renderModeSection();
+  }
+};
+$('r-hours').addEventListener('input', e => {
+  if (!S) return;
+  runDraft.active = true;
+  runDraft.hours = Number(e.target.value);
+  renderModeSection();
+});
+$('b-run-cancel').onclick = () => {
+  runDraft.active = false;
+  runDraft.hours = null;
+  renderModeSection();
+};
+$('b-run-confirm').onclick = async () => {
+  if (!S) return;
+  const hours = runDraft.hours ?? S.mode.hours ?? 12;
+  const btn = $('b-run-confirm');
+  btn.disabled = true;
+  try {
+    await setMode('run', hours);
+    runDraft.active = false;
+    runDraft.hours = null;
+    renderModeSection();
+  } finally {
+    btn.disabled = false;
+  }
+};
 $('agent-start').onclick = async () => {
   try {
     const r = await api.start_agent();
@@ -292,9 +407,29 @@ window.addEventListener('keydown', e => {
 // 仅在窗口可见时本地重算剩余时间，零 IPC、零磁盘、零 EC 唤醒
 setInterval(updateLiveCountdowns, 30000);
 
+let lastReportedHeight = 0;
+let heightRaf = 0;
+function scheduleContentHeightSync() {
+  if (!hasWebViewHost || heightRaf || document.documentElement.dataset.windowState === 'maximized') return;
+  heightRaf = requestAnimationFrame(() => {
+    heightRaf = 0;
+    const main = document.querySelector('main');
+    if (!main) return;
+    const h = Math.ceil(main.getBoundingClientRect().height);
+    if (h > 0 && Math.abs(h - lastReportedHeight) >= 2) {
+      lastReportedHeight = h;
+      api.set_content_height(h).catch(() => {});
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   if (mockHost) mockHost.initToolbar();
   syncExpandedByWidth();
+  const main = document.querySelector('main');
+  if (main && typeof ResizeObserver === 'function') {
+    new ResizeObserver(scheduleContentHeightSync).observe(main);
+  }
   refresh();
 });
 window.addEventListener('focus', refresh);

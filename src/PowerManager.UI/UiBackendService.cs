@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using PowerManager.Core.Contracts;
+using PowerManager.Core.Logic;
 using PowerManager.Core.Models;
 using PowerManager.Core.Policy;
 using PowerManager.Platform.Ipc;
@@ -90,7 +91,7 @@ public sealed class UiBackendService
         bool isRun = string.Equals(mode, "run", StringComparison.OrdinalIgnoreCase)
             || string.Equals(mode, ModeState.ModeKeepRunningValue, StringComparison.OrdinalIgnoreCase);
 
-        int resolvedHours = hours.HasValue && PowerPolicy.KeepRunningDurationHoursOptions.Contains(hours.Value)
+        int resolvedHours = hours.HasValue && PowerModeCalculator.IsValidKeepRunningDuration(hours.Value)
             ? hours.Value
             : PowerPolicy.KeepRunningDefaultHours;
 

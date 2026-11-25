@@ -54,7 +54,9 @@ public static class Program
         if (agentResp is { Ok: true })
         {
             string modeLabel = agentResp.ModeState?.ParsedMode == AgentMode.KeepRunning
-                ? $"保持运行（至 {agentResp.ModeState.RunUntilUtc?.ToLocalTime():yyyy-MM-dd HH:mm}）"
+                ? (agentResp.ModeState.RunUntilUtc.HasValue
+                    ? $"保持运行（至 {agentResp.ModeState.RunUntilUtc.Value.ToLocalTime():yyyy-MM-dd HH:mm}）"
+                    : "保持运行（直到手动改回）")
                 : "普通模式";
             Console.WriteLine($"常驻调度: 运行中 | 模式: {modeLabel} | 主动睡眠: {(agentResp.ForcedSleepActive ? "是" : "否")}");
         }
@@ -101,7 +103,7 @@ public static class Program
     {
         if (args.Length < 2)
         {
-            Console.Error.WriteLine("用法: pmctl mode <normal|keep-running> [--hours 2|4|8|12|24]");
+            Console.Error.WriteLine("用法: pmctl mode <normal|keep-running> [--hours 1..24]");
             return 1;
         }
 
@@ -123,7 +125,7 @@ public static class Program
 
             if (!PowerModeCalculator.IsValidKeepRunningDuration(durationHours.Value))
             {
-                Console.Error.WriteLine("无效时长：--hours 仅支持 2 / 4 / 8 / 12 / 24。");
+                Console.Error.WriteLine($"无效时长：--hours 需在 {PowerPolicy.KeepRunningMinHours}–{PowerPolicy.KeepRunningMaxHours} 小时之间（0 表示直到手动改回）。");
                 return 1;
             }
         }
@@ -259,7 +261,7 @@ public static class Program
         Console.WriteLine("PowerManager 控制台工具 (pmctl)");
         Console.WriteLine("用法:");
         Console.WriteLine("  pmctl status [--data-dir <path>] [--pipe-name <name>]");
-        Console.WriteLine("  pmctl mode <normal|keep-running> [--hours 2|4|8|12|24] [--pipe-name <name>]");
+        Console.WriteLine("  pmctl mode <normal|keep-running> [--hours 1..24] [--pipe-name <name>]");
         Console.WriteLine("  pmctl boost <85..100> [--hold-min 60] [--max-hours 4] [--data-dir <path>] [--dry-run]");
         Console.WriteLine("  pmctl restore-original [--data-dir <path>] [--pipe-name <name>] [--dry-run]");
         Console.WriteLine("  pmctl paths [--data-dir <path>]");

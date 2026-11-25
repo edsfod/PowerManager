@@ -33,7 +33,7 @@
 
 ### 2. 双模式策略与系统 API 契约
 
-| 配置项 | 普通模式 | 保持运行模式（2/4/8/12/24 小时，默认 12 小时） |
+| 配置项 | 普通模式 | 保持运行模式（1–24 小时，快捷档位 2/4/8/12/24，默认 12 小时） |
 |---|---|---|
 | 插电关屏 / 睡眠 | 15 分钟 / 1 小时（`SLP-03`） | 15 分钟 / 从不（`SLP-04`） |
 | 用电池关屏 / 睡眠 | 5 分钟 / 15 分钟（`SLP-03`） | 5 分钟 / 30 分钟；每 3 分钟查温度 ≥ 40 °C 提前睡（`SLP-05`） |
@@ -66,10 +66,10 @@
 
 ## 四、 交互界面（`ui`）、命令行（`pmctl`）与跨进程通信
 
-目前 `ui` 与 `pmctl` 的设计集中归口在本节，不单独拆分子目录文档：
+本节聚焦 `ui` 与 `pmctl` 的**进程边界与跨进程通信契约**；交互界面子系统的独立需求、通用规范与实现设计归口于 [src/PowerManager.UI/docs/](../src/PowerManager.UI/docs/)（[requirements.md](../src/PowerManager.UI/docs/requirements.md)、[conventions.md](../src/PowerManager.UI/docs/conventions.md)、[design.md](../src/PowerManager.UI/docs/design.md)）：
 
 - **界面宿主与标识**：`PowerManager.UI.exe` 由 `Microsoft.Web.WebView2` 挂载系统自带 WebView2 渲染单页前端（`web/index.html` 作为 `EmbeddedResource` 内嵌，用户数据目录隔离在 `<DataDir>/ui/webview2/`，不污染程序目录）；进程启动时主动调用 `SetCurrentProcessExplicitAppUserModelID('PowerManager')`，使任务栏图标与通知发送者标识一致；通过按管道名隔离的当前用户单实例 `Mutex`（`Local\PowerManager.UI.<pipeName>`）防止重复多开，再次启动时激活已有窗口；支持 `--debug`（开启开发者工具）、`--data-dir`、`--pipe-name`、`--dry-run` 与 `--smoke-test` 参数。
-- **前端桥接契约与独立预览**：宿主与前端之间通过 WebView2 JSON-RPC 通信——前端发送 `{ id, method, params }`，宿主回传 `{ id, result, error }`；窗口重新激活时宿主主动推送 `{ event: "focus" }` 触发刷新。桥接方法共 9 项：`get_state`（返回 `UiStateView` 状态快照）、`set_mode`（`mode`, `hours`）、`boost`（`target`, `hold`, `maxh`）、`refresh_ec`、`open_data_dir`、`start_agent`、`set_expanded`（`expanded`）、`close_window`、`smoke_ready`（其余操作均返回 `UiActionResult { ok, msg? }`）。前端样式通过语义化 CSS Design Tokens（表面、文字、状态色、圆角、间距、动效）组织，且在无 `window.chrome.webview` 宿主环境时自动回落至内置 Mock 桥接，支持直接用浏览器打开 `web/index.html` 离线预览各运行态与主题切换。
+- **前端桥接契约与独立预览**：宿主与前端之间通过 WebView2 JSON-RPC 通信——前端发送 `{ id, method, params }`，宿主回传 `{ id, result, error }`；窗口重新激活时宿主主动推送 `{ event: "focus" }` 触发刷新。桥接方法共 10 项：`get_state`（返回 `UiStateView` 状态快照）、`set_mode`（`mode`, `hours`）、`boost`（`target`, `hold`, `maxh`）、`refresh_ec`、`open_data_dir`、`start_agent`、`set_expanded`（`expanded`）、`set_content_height`（`height`，内容驱动窗口高度贴合）、`close_window`、`smoke_ready`（其余操作均返回 `UiActionResult { ok, msg? }`）。前端样式通过语义化 CSS Design Tokens（表面、文字、状态色、圆角、间距、动效）组织，且在无 `window.chrome.webview` 宿主环境时自动回落至内置 Mock 桥接，支持直接用浏览器打开 `web/index.html` 离线预览各运行态与主题切换。
 - **状态读取**：界面与 `pmctl` 只读展示 `<DataDir>/agent/mode.json`（当前模式与到期时间）、`<DataDir>/battery-charge/state.json`（当前 EC 阈值、冲高倒计时与温度），以及直接读取非提权的当前电源模式（`powrprof`）与标准 `BatteryStatus`；界面用户偏好（保持运行时长、冲高参数、规则面板展开状态）保存于 `<DataDir>/ui/prefs.json`。
 - **跨进程通信（IPC）契约（[ADR-0006](adr/0006-csharp-architecture-ipc-and-data-dir.md)）**：界面与 `pmctl` 以普通权限运行，不直接修改系统设置，也不弹出 UAC 确认框：
   - **`ui / pmctl ↔ agent`（同步 Named Pipe）**：`agent` 监听仅限当前用户 SID 访问的 Named Pipe（`\\.\pipe\PowerManager.Agent`），接收 JSON 命令（切换普通/保持运行模式、查询实时状态含主动睡眠状态、执行 `--restore-original` 停用恢复），投递至主消息循环执行后同步返回结构化 JSON 回执（成功/失败原因）。

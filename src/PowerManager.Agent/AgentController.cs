@@ -148,16 +148,22 @@ public sealed class AgentController : IDisposable
             int hours = req.DurationHours ?? PowerPolicy.KeepRunningDefaultHours;
             if (!PowerModeCalculator.IsValidKeepRunningDuration(hours))
             {
-                return new AgentIpcResponse(false, $"不支持的保持运行时长：{hours} 小时（可选 2/4/8/12/24）。");
+                return new AgentIpcResponse(false, $"不支持的保持运行时长：{hours} 小时（范围 {PowerPolicy.KeepRunningMinHours}–{PowerPolicy.KeepRunningMaxHours} 小时，或 0 表示直到手动改回）。");
             }
 
             _modeState = ModeState.CreateKeepRunning(nowUtc, hours);
             _normalLidSleepDueUtc = null;
             ClearForcedSleep("switched to keep_running");
             _actions.PersistModeState(_modeState);
-            _actions.ApplyPowerScheme(_modeState.ParsedMode, _forcedSleep is not null, $"set keep_running {hours}h");
+            _actions.ApplyPowerScheme(_modeState.ParsedMode, _forcedSleep is not null, hours == 0 ? "set keep_running indefinite" : $"set keep_running {hours}h");
             ScheduleCommuteCheckIfNeeded(nowUtc);
             RecomputeAndArmTimer(nowUtc);
+            if (hours == 0)
+            {
+                _log.Info("Mode switched to keep_running (until manually reverted)");
+                return new AgentIpcResponse(true, "已切换至保持运行模式（直到手动改回）。", _modeState, false, _paths.DataDir);
+            }
+
             _log.Info($"Mode switched to keep_running for {hours}h (until {_modeState.RunUntilUtc:yyyy-MM-ddTHH:mm:ssZ})");
             return new AgentIpcResponse(true, $"已切换至保持运行模式（{hours} 小时）。", _modeState, false, _paths.DataDir);
         }

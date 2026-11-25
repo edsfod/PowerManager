@@ -60,7 +60,8 @@ public static class PowerModeCalculator
     }
 
     public static bool IsValidKeepRunningDuration(int hours) =>
-        PowerPolicy.KeepRunningDurationHoursOptions.Contains(hours);
+        hours == PowerPolicy.KeepRunningIndefiniteHours
+        || (hours >= PowerPolicy.KeepRunningMinHours && hours <= PowerPolicy.KeepRunningMaxHours);
 
     /// <summary>
     /// 评估保持运行模式是否到期（SLP-02）。到期时返回回落后的普通模式与通知标记。

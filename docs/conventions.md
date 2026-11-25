@@ -58,7 +58,8 @@
 | `README.md` | 项目简介、适用范围、用法、安装与文档导航链接 | 内部设计细节、硬件逆向过程、长篇移植步骤 |
 | [ARCHITECTURE.md](../ARCHITECTURE.md) | 项目依赖图、架构不变量、源码文件地图、跨进程主链路与按任务最小阅读清单 | 逐项业务参数细节、替代 `requirements.md`/`design.md` 的规格说明、历史变更流水 |
 | [requirements.md](requirements.md) | 外部可验收的行为需求与非目标边界（What） | 实现方案、历史修改轮次、实测流水、待办排查 |
-| [design.md](design.md) | 当前生效的架构分层、模块契约、状态流转与持久化（How） | 历史版本对比、硬件反编译推导过程 |
+| [design.md](design.md) | 当前生效的架构分层、模块契约、状态流转与持久化（How） | 历史版本对比、硬件反编译推导过程、前端排版与视觉细节 |
+| `src/PowerManager.UI/docs/` | UI 子系统自治三件套：`requirements.md`（`UI-*` 外部行为）、`conventions.md`（通用 UI 工程规范）、`design.md`（布局/状态机与追踪矩阵） | 跨进程 IPC 底层实现、硬件/电源调度逻辑 |
 | `docs/adr/` | 架构决策的背景、取舍依据与影响（Why） | 完整使用手册或逐行接口字典 |
 | `docs/reference/` | 客观硬件/系统机制事实、接口字节契约、实验环境与复现出处 | 软件应当如何设计的处方性语句（如“因此任务必须用 S4U”） |
 | `docs/investigations/` | 带 ISO 日期前缀的一次性故障排查快照与未决线索 | 长期有效的通用规范或系统设计 |

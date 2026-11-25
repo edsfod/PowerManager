@@ -55,15 +55,16 @@ public sealed class PowerModeCalculatorTests
     }
 
     [Theory]
+    [InlineData(-1, false)]
+    [InlineData(0, true)]
+    [InlineData(1, true)]
     [InlineData(2, true)]
-    [InlineData(4, true)]
-    [InlineData(8, true)]
+    [InlineData(6, true)]
     [InlineData(12, true)]
     [InlineData(24, true)]
-    [InlineData(1, false)]
-    [InlineData(6, false)]
+    [InlineData(25, false)]
     [InlineData(48, false)]
-    public void IsValidKeepRunningDuration_ChecksAllowedOptions(int hours, bool expected)
+    public void IsValidKeepRunningDuration_ChecksAllowedRange(int hours, bool expected)
     {
         Assert.Equal(expected, PowerModeCalculator.IsValidKeepRunningDuration(hours));
     }

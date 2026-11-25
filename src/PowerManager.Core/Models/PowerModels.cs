@@ -64,5 +64,5 @@ public sealed record ModeState(
         new(ModeNormalValue, null, nowUtc);
 
     public static ModeState CreateKeepRunning(DateTimeOffset nowUtc, int durationHours) =>
-        new(ModeKeepRunningValue, nowUtc.AddHours(durationHours), nowUtc);
+        new(ModeKeepRunningValue, durationHours <= 0 ? null : nowUtc.AddHours(durationHours), nowUtc);
 }

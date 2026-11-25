@@ -54,7 +54,7 @@ PowerManager.BatteryCharge ──────► PowerManager.Platform          
 
 | 我要改什么 | 只需先看哪节文档 | 重点关注源码 | 改完必跑校验 |
 |---|---|---|---|
-| **桌面 UI / 前端样式 / 桥接方法** | [docs/design.md](docs/design.md) §四 | `src/PowerManager.UI/`、`Core/Contracts/IpcContracts.cs` | 浏览器离线预览 `web/index.html` + `dotnet build PowerManager.sln` |
+| **桌面 UI / 前端样式 / 桥接方法** | [src/PowerManager.UI/docs/](src/PowerManager.UI/docs/)（`requirements.md` / `conventions.md` / `design.md`）、[docs/design.md](docs/design.md) §四 | `src/PowerManager.UI/`、`Core/Contracts/IpcContracts.cs` | `python scripts/verify_ui_layout.py` + 目视截图 + `dotnet build PowerManager.sln` |
 | **睡眠策略 / 合盖休眠兜底 / 醒来通知** | [docs/design.md](docs/design.md) §二、[docs/reference/windows-standby-and-toast.md](docs/reference/windows-standby-and-toast.md) | `Core/Policy/PowerPolicy.cs`、`Core/Logic/`、`Agent/AgentController.cs`、`Platform/Win32/` | `dotnet test PowerManager.sln`（涉及电源边界加跑 `verify_power_boundaries.py`） |
 | **充电阈值 / 临时冲高 / WMI 硬件适配** | [docs/design.md](docs/design.md) §三、[docs/reference/wmi-ec-interface.md](docs/reference/wmi-ec-interface.md)、[ADR-0003](docs/adr/0003-rejection-of-adaptive-charge.md) | `Core/Logic/ChargeDecisionEngine.cs`、`Hardware.MateBook/`、`BatteryCharge/Program.cs` | `dotnet test PowerManager.sln` + 实机只读 `verify_wmi_readonly.py` |
 | **跨进程 IPC / 状态文件 Schema / `pmctl`** | [docs/design.md](docs/design.md) §四–§五、[ADR-0006](docs/adr/0006-csharp-architecture-ipc-and-data-dir.md) | `Core/Contracts/`、`Core/Models/`、`Platform/Ipc/`、`Platform/Storage/`、`Cli/Program.cs` | `dotnet test PowerManager.sln`（重点关注 `AgentNamedPipeIntegrationTests` 与 `SchemaCompatibilityTests`） |

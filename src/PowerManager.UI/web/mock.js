@@ -55,9 +55,17 @@ window.createPowerManagerMockHost = function createPowerManagerMockHost(onRefres
   }
 
   function initToolbar() {
+    const qs = new URLSearchParams(window.location.search);
+    const preset = qs.get('preset');
+    if (preset) applyPreset(preset);
+    if (qs.get('expanded') === '1') state.rules_expanded = true;
+    if (qs.get('maximized') === '1') document.documentElement.dataset.windowState = 'maximized';
+
     const bar = document.getElementById('mock-bar');
     const box = document.getElementById('mock-presets');
-    bar.classList.remove('hidden');
+    if (qs.get('hideMockBar') !== '1') {
+      bar.classList.remove('hidden');
+    }
     const items = [
       ['正常', () => applyPreset('normal')],
       ['保持运行', () => applyPreset('run')],
@@ -79,6 +87,23 @@ window.createPowerManagerMockHost = function createPowerManagerMockHost(onRefres
       b.onclick = () => { fn(); onRefresh(); };
       box.appendChild(b);
     }
+
+    if (qs.get('audit') === '1') {
+      const reportMetrics = () => {
+        if (qs.get('draft') === '1') {
+          const runTile = document.getElementById('t-run');
+          if (runTile && !runTile.classList.contains('on') && !runTile.classList.contains('draft')) {
+            runTile.click();
+          }
+        }
+        const root = document.documentElement;
+        const main = document.querySelector('main');
+        document.body.dataset.scrollHeight = String(root.scrollHeight);
+        document.body.dataset.clientHeight = String(root.clientHeight);
+        document.body.dataset.mainHeight = String(main ? Math.ceil(main.getBoundingClientRect().height) : 0);
+      };
+      setTimeout(reportMetrics, 250);
+    }
   }
 
   return {
@@ -89,10 +114,14 @@ window.createPowerManagerMockHost = function createPowerManagerMockHost(onRefres
           return JSON.parse(JSON.stringify(state));
         case 'set_mode': {
           const mode = params.mode || 'normal';
-          const hours = Number(params.hours || 12);
+          const hours = params.hours != null ? Number(params.hours) : 12;
           if (mode === 'run') {
-            const end = new Date(Date.now() + hours * 3600 * 1000);
-            state.mode = { mode: 'run', hours, until: fmtHm(end), left: `${hours} 小时 0 分`, run_until_utc: end.toISOString() };
+            if (hours === 0) {
+              state.mode = { mode: 'run', hours: 0, until: null, left: null, run_until_utc: null };
+            } else {
+              const end = new Date(Date.now() + hours * 3600 * 1000);
+              state.mode = { mode: 'run', hours, until: fmtHm(end), left: `${hours} 小时 0 分`, run_until_utc: end.toISOString() };
+            }
           } else {
             state.mode = { mode: 'normal', hours: state.mode.hours, until: null, left: null, run_until_utc: null };
           }
@@ -120,6 +149,8 @@ window.createPowerManagerMockHost = function createPowerManagerMockHost(onRefres
           return { ok: true };
         case 'set_expanded':
           state.rules_expanded = !!params.expanded;
+          return { ok: true };
+        case 'set_content_height':
           return { ok: true };
         case 'close_window':
           onToast('Mock 模式：Esc 关闭窗口');

@@ -22,14 +22,10 @@
       <div class="mode-left">
         <div class="tiles">
           <div class="tile" id="t-normal"><b>普通</b><span>合盖 1 分钟后睡</span></div>
-          <div class="tile" id="t-run"><b>保持运行</b><span>跑实验、通勤：插电不睡，合盖继续跑</span></div>
-        </div>
-        <div class="runbar hidden" id="runbar">
-          <span class="left num" id="run-left"></span>
-          <span class="row"><span class="faint">时长</span><span class="chips" id="hours"></span></span>
-        </div>
-        <div class="alertbar hidden" id="forced-sleep-bar">
-          主动睡眠已触发：2 分钟内未入睡将自动休眠（开盖活动可中止）
+          <div class="tile" id="t-run">
+            <div class="tile-head"><b>保持运行</b><span class="draft-badge hidden" id="run-draft-badge">待确认</span></div>
+            <span>跑实验、通勤：插电不睡，合盖继续跑</span>
+          </div>
         </div>
       </div>
       <div class="rules-panel">
@@ -39,6 +35,26 @@
           <button type="button" class="text-btn" id="open-data-dir">打开数据目录</button>
         </div>
       </div>
+    </div>
+    <div class="runbar hidden" id="runbar">
+      <div class="runbar-top">
+        <span class="left num" id="run-left"></span>
+        <span class="runbar-actions hidden" id="run-actions">
+          <button type="button" class="mini-btn" id="b-run-cancel">取消</button>
+          <button type="button" class="btn btn-sm" id="b-run-confirm">确认</button>
+        </span>
+      </div>
+      <div class="runbar-ctrl">
+        <span class="faint">时长</span>
+        <div class="slider-row">
+          <input type="range" id="r-hours" min="1" max="24" step="1">
+          <span class="slider-val num" id="v-hours"></span>
+        </div>
+        <span class="chips" id="hours"></span>
+      </div>
+    </div>
+    <div class="alertbar hidden" id="forced-sleep-bar">
+      主动睡眠已触发：2 分钟内未入睡将自动休眠（开盖活动可中止）
     </div>
   </section>
 
@@ -68,12 +84,8 @@
         <div class="stat"><dt>整机功耗</dt><dd class="num" id="s-power">–</dd></div>
         <div class="stat"><dt>充电电流</dt><dd class="num" id="s-ma">–</dd></div>
         <div class="stat"><dt>最热传感器</dt><dd class="num" id="s-hot">–</dd></div>
-        <div class="stat wide">
-          <div class="pm-boxes">
-            <div class="pm-box" id="pm-ac"><span>插电</span><b id="pm-ac-v">–</b></div>
-            <div class="pm-box" id="pm-dc"><span>用电池</span><b id="pm-dc-v">–</b></div>
-          </div>
-        </div>
+        <div class="stat pm-stat" id="pm-ac"><dt>插电</dt><dd id="pm-ac-v">–</dd></div>
+        <div class="stat pm-stat" id="pm-dc"><dt>用电池</dt><dd id="pm-dc-v">–</dd></div>
       </dl>
       <div class="note" id="note"></div>
     </div>
