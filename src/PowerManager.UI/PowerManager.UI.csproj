@@ -20,6 +20,9 @@
 
   <ItemGroup>
     <EmbeddedResource Include="web\index.html" LogicalName="PowerManager.UI.web.index.html" />
+    <EmbeddedResource Include="web\styles.css" LogicalName="PowerManager.UI.web.styles.css" />
+    <EmbeddedResource Include="web\mock.js" LogicalName="PowerManager.UI.web.mock.js" />
+    <EmbeddedResource Include="web\app.js" LogicalName="PowerManager.UI.web.app.js" />
     <EmbeddedResource Include="Assets\icon.ico" LogicalName="PowerManager.UI.Assets.icon.ico" />
   </ItemGroup>
 

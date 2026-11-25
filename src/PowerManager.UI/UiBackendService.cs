@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using PowerManager.Core.Contracts;
 using PowerManager.Core.Models;
 using PowerManager.Core.Policy;
@@ -10,72 +8,8 @@ using PowerManager.Platform.Win32;
 
 namespace PowerManager.UI;
 
-public sealed record UiPrefs(
-    [property: JsonPropertyName("hours")] int Hours = PowerPolicy.KeepRunningDefaultHours,
-    [property: JsonPropertyName("boost_target")] int BoostTarget = 95,
-    [property: JsonPropertyName("boost_hold")] int BoostHold = PowerPolicy.BoostHoldMinutesDefault,
-    [property: JsonPropertyName("boost_maxh")] double BoostMaxHours = PowerPolicy.BoostMaxHoursDefault,
-    [property: JsonPropertyName("rules_expanded")] bool RulesExpanded = false);
-
-public sealed record UiActionResult(
-    [property: JsonPropertyName("ok")] bool Ok,
-    [property: JsonPropertyName("msg")] string? Msg = null);
-
-public sealed record UiModeView(
-    [property: JsonPropertyName("mode")] string Mode,
-    [property: JsonPropertyName("hours")] int Hours,
-    [property: JsonPropertyName("until")] string? Until,
-    [property: JsonPropertyName("left")] string? Left,
-    [property: JsonPropertyName("run_until_utc")] string? RunUntilUtc);
-
-public sealed record UiPowerModeView(
-    [property: JsonPropertyName("ac")] string Ac,
-    [property: JsonPropertyName("dc")] string Dc);
-
-public sealed record UiBatteryView(
-    [property: JsonPropertyName("pct")] int? Pct,
-    [property: JsonPropertyName("ac")] bool? Ac,
-    [property: JsonPropertyName("flow")] string Flow,
-    [property: JsonPropertyName("band")] int[] Band,
-    [property: JsonPropertyName("hw")] int[]? Hw,
-    [property: JsonPropertyName("temp")] double? Temp,
-    [property: JsonPropertyName("system_w")] int? SystemW,
-    [property: JsonPropertyName("charge_ma")] int? ChargeMa,
-    [property: JsonPropertyName("hottest")] double? Hottest,
-    [property: JsonPropertyName("read_at")] string? ReadAt,
-    [property: JsonPropertyName("read_age_min")] int? ReadAgeMinutes,
-    [property: JsonPropertyName("slow")] bool Slow,
-    [property: JsonPropertyName("last")] string Last);
-
-public sealed record UiBoostView(
-    [property: JsonPropertyName("active")] bool Active,
-    [property: JsonPropertyName("target")] int? Target = null,
-    [property: JsonPropertyName("hold")] int? Hold = null,
-    [property: JsonPropertyName("held")] int? Held = null,
-    [property: JsonPropertyName("full_since_utc")] string? FullSinceUtc = null,
-    [property: JsonPropertyName("deadline")] string? Deadline = null);
-
-public sealed record UiBoostPrefsView(
-    [property: JsonPropertyName("target")] int Target,
-    [property: JsonPropertyName("hold")] int Hold,
-    [property: JsonPropertyName("maxh")] double MaxHours);
-
-public sealed record UiStateView(
-    [property: JsonPropertyName("agent")] bool Agent,
-    [property: JsonPropertyName("dry_run")] bool DryRun,
-    [property: JsonPropertyName("forced_sleep")] bool ForcedSleep,
-    [property: JsonPropertyName("rules_expanded")] bool RulesExpanded,
-    [property: JsonPropertyName("data_dir")] string DataDir,
-    [property: JsonPropertyName("mode")] UiModeView Mode,
-    [property: JsonPropertyName("power_mode")] UiPowerModeView PowerMode,
-    [property: JsonPropertyName("battery")] UiBatteryView Battery,
-    [property: JsonPropertyName("boost")] UiBoostView Boost,
-    [property: JsonPropertyName("boost_prefs")] UiBoostPrefsView BoostPrefs);
-
-public sealed partial class UiBackendService
+public sealed class UiBackendService
 {
-    private const int LowChargeMaThreshold = 1000;
-
     private readonly AppPaths _paths;
     private readonly string _pipeName;
     private readonly bool _dryRun;
@@ -86,6 +20,8 @@ public sealed partial class UiBackendService
         _pipeName = pipeName;
         _dryRun = dryRun;
     }
+
+    public static string TranslateRevertReason(string? text) => UiStateFormatter.TranslateRevertReason(text);
 
     public bool GetRulesExpandedPref() => LoadPrefs().RulesExpanded;
 
@@ -127,68 +63,14 @@ public sealed partial class UiBackendService
 
         modeState ??= ReadJsonSafe<ModeState>(_paths.ModeJsonPath) ?? ModeState.CreateNormal(nowUtc);
 
-        UiModeView modeView = BuildModeView(modeState, prefs.Hours, nowUtc);
-
         var (osAc, osPct) = PowerSchemeInterop.GetOsPowerStatus();
         var state = ReadJsonSafe<ChargeStateSnapshot>(_paths.StateJsonPath);
-        var ec = state?.Ec;
-        var win = state?.Win;
-        var boost = state?.Boost;
-
         bool acOnline = osAc ?? state?.OsPower.AcOnline ?? false;
         int? pct = osPct ?? state?.OsPower.Percent;
-        int[] band = state?.Target is { Length: 2 } t
-            ? t
-            : [PowerPolicy.DefaultChargeStartPercent, PowerPolicy.DefaultChargeStopPercent];
-
-        string flow = BuildFlowText(acOnline, pct, band[1], win);
-        int[]? hw = ec is { HwOk: true, HwStart: not null, HwStop: not null }
-            ? [ec.HwStart.Value, ec.HwStop.Value]
-            : null;
-
-        bool slow = acOnline
-            && win is { Charging: true }
-            && ec?.ChargeMa is not null
-            && ec.ChargeMa.Value < LowChargeMaThreshold
-            && pct is not null
-            && pct.Value < band[1] - 1;
-
-        string? readAt = state is not null
-            ? state.UpdatedAtUtc.ToLocalTime().ToString("MM-dd HH:mm")
-            : null;
-        int? readAgeMinutes = state is not null
-            ? Math.Max(0, (int)(nowUtc - state.UpdatedAtUtc).TotalMinutes)
-            : null;
-
-        string lastReason = boost is { Active: true }
-            ? string.Empty
-            : TranslateRevertReason(boost?.LastReason);
-
-        var batteryView = new UiBatteryView(
-            Pct: pct,
-            Ac: acOnline,
-            Flow: flow,
-            Band: band,
-            Hw: hw,
-            Temp: ec?.BatteryC,
-            SystemW: ec?.SystemW,
-            ChargeMa: ec?.ChargeMa,
-            Hottest: ec?.HottestC,
-            ReadAt: readAt,
-            ReadAgeMinutes: readAgeMinutes,
-            Slow: slow,
-            Last: lastReason);
-
-        UiBoostView boostView = BuildBoostView(boost, nowUtc);
 
         var powerModeView = new UiPowerModeView(
-            Ac: FormatPowerModeZh(PowerSchemeInterop.GetUserPowerMode(ac: true)),
-            Dc: FormatPowerModeZh(PowerSchemeInterop.GetUserPowerMode(ac: false)));
-
-        var boostPrefsView = new UiBoostPrefsView(
-            Target: Math.Clamp(prefs.BoostTarget, PowerPolicy.BoostTargetMinPercent, PowerPolicy.BoostTargetMaxPercent),
-            Hold: Math.Clamp(prefs.BoostHold, PowerPolicy.BoostHoldMinutesMin, PowerPolicy.BoostHoldMinutesMax),
-            MaxHours: Math.Clamp(prefs.BoostMaxHours, PowerPolicy.BoostMaxHoursMin, PowerPolicy.BoostMaxHoursMax));
+            Ac: UiStateFormatter.FormatPowerModeZh(PowerSchemeInterop.GetUserPowerMode(ac: true)),
+            Dc: UiStateFormatter.FormatPowerModeZh(PowerSchemeInterop.GetUserPowerMode(ac: false)));
 
         return new UiStateView(
             Agent: agentOnline,
@@ -196,11 +78,11 @@ public sealed partial class UiBackendService
             ForcedSleep: forcedSleep,
             RulesExpanded: prefs.RulesExpanded,
             DataDir: _paths.DataDir,
-            Mode: modeView,
+            Mode: UiStateFormatter.BuildModeView(modeState, prefs.Hours, nowUtc),
             PowerMode: powerModeView,
-            Battery: batteryView,
-            Boost: boostView,
-            BoostPrefs: boostPrefsView);
+            Battery: UiStateFormatter.BuildBatteryView(acOnline, pct, state, nowUtc),
+            Boost: UiStateFormatter.BuildBoostView(state?.Boost, nowUtc),
+            BoostPrefs: UiStateFormatter.BuildBoostPrefsView(prefs));
     }
 
     public async Task<UiActionResult> SetModeAsync(string mode, int? hours, CancellationToken ct = default)
@@ -214,8 +96,7 @@ public sealed partial class UiBackendService
 
         if (isRun)
         {
-            var prefs = LoadPrefs() with { Hours = resolvedHours };
-            SavePrefs(prefs);
+            SavePrefs(LoadPrefs() with { Hours = resolvedHours });
         }
 
         try
@@ -236,21 +117,20 @@ public sealed partial class UiBackendService
         }
     }
 
-    public async Task<UiActionResult> RequestBoostAsync(int target, int holdMinutes, double maxHours, CancellationToken ct = default)
+    public Task<UiActionResult> RequestBoostAsync(int target, int holdMinutes, double maxHours, CancellationToken ct = default)
     {
         var boostReq = new BoostRequest(target, holdMinutes, maxHours);
         if (!boostReq.TryValidate(out string? err))
         {
-            return new UiActionResult(false, err ?? "冲高参数超出允许范围。");
+            return Task.FromResult(new UiActionResult(false, err ?? "冲高参数超出允许范围。"));
         }
 
-        var prefs = LoadPrefs() with
+        SavePrefs(LoadPrefs() with
         {
             BoostTarget = target,
             BoostHold = holdMinutes,
             BoostMaxHours = maxHours
-        };
-        SavePrefs(prefs);
+        });
 
         var ecReq = new EcTaskRequest(
             Kind: EcTaskRequestKind.Boost,
@@ -258,38 +138,19 @@ public sealed partial class UiBackendService
             Boost: boostReq,
             CreatedAtUtc: DateTimeOffset.UtcNow);
 
-        string reqPath;
-        try
-        {
-            _paths.EnsureDirectoriesExist();
-            reqPath = AtomicFileStore.WriteEcRequestAtomic(_paths, ecReq);
-        }
-        catch (Exception ex)
-        {
-            return new UiActionResult(false, $"写入冲高请求失败：{ex.Message}");
-        }
-
-        if (_dryRun)
-        {
-            return new UiActionResult(true, $"[dry-run] 已写入冲高请求文件：{Path.GetFileName(reqPath)}");
-        }
-
-        var (started, triggerErr) = ScheduledTaskTrigger.TriggerTask(IpcConstants.BatteryChargeTaskName);
-        if (!started)
-        {
-            return new UiActionResult(
-                false,
-                $"计划任务 {IpcConstants.BatteryChargeTaskName} 没有响应（{triggerErr ?? "未知错误"}）：请以管理员身份运行一次 install.ps1，或查看 battery-charge\\error.log。");
-        }
-
-        await WaitForRequestConsumedAsync(reqPath, ct).ConfigureAwait(false);
-        return new UiActionResult(true);
+        return SubmitEcTaskRequestAsync(
+            ecReq,
+            writeErrPrefix: "写入冲高请求失败",
+            dryRunPrefix: "[dry-run] 已写入冲高请求文件",
+            taskErrSuffix: "：请以管理员身份运行一次 install.ps1，或查看 battery-charge\\error.log。",
+            successMsg: null,
+            ct);
     }
 
     /// <summary>
     /// 按需触发一次 Battery-ChargeLimit 刷新 EC 温度/功耗/阈值读数（零轮询，无 UAC）。
     /// </summary>
-    public async Task<UiActionResult> RefreshEcAsync(CancellationToken ct = default)
+    public Task<UiActionResult> RefreshEcAsync(CancellationToken ct = default)
     {
         var ecReq = new EcTaskRequest(
             Kind: EcTaskRequestKind.Trigger,
@@ -297,32 +158,13 @@ public sealed partial class UiBackendService
             Boost: null,
             CreatedAtUtc: DateTimeOffset.UtcNow);
 
-        string reqPath;
-        try
-        {
-            _paths.EnsureDirectoriesExist();
-            reqPath = AtomicFileStore.WriteEcRequestAtomic(_paths, ecReq);
-        }
-        catch (Exception ex)
-        {
-            return new UiActionResult(false, $"写入刷新请求失败：{ex.Message}");
-        }
-
-        if (_dryRun)
-        {
-            return new UiActionResult(true, $"[dry-run] 已写入刷新请求：{Path.GetFileName(reqPath)}");
-        }
-
-        var (started, triggerErr) = ScheduledTaskTrigger.TriggerTask(IpcConstants.BatteryChargeTaskName);
-        if (!started)
-        {
-            return new UiActionResult(
-                false,
-                $"计划任务 {IpcConstants.BatteryChargeTaskName} 没有响应（{triggerErr ?? "未知错误"}）。");
-        }
-
-        await WaitForRequestConsumedAsync(reqPath, ct).ConfigureAwait(false);
-        return new UiActionResult(true, "已刷新 EC 读数");
+        return SubmitEcTaskRequestAsync(
+            ecReq,
+            writeErrPrefix: "写入刷新请求失败",
+            dryRunPrefix: "[dry-run] 已写入刷新请求",
+            taskErrSuffix: "。",
+            successMsg: "已刷新 EC 读数",
+            ct);
     }
 
     public UiActionResult OpenDataDir()
@@ -381,26 +223,40 @@ public sealed partial class UiBackendService
         return new UiActionResult(false, "没能启动常驻程序：请以管理员身份运行一次 install.ps1。");
     }
 
-    public static string TranslateRevertReason(string? text)
+    private async Task<UiActionResult> SubmitEcTaskRequestAsync(
+        EcTaskRequest ecReq,
+        string writeErrPrefix,
+        string dryRunPrefix,
+        string taskErrSuffix,
+        string? successMsg,
+        CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        string reqPath;
+        try
         {
-            return string.Empty;
+            _paths.EnsureDirectoriesExist();
+            reqPath = AtomicFileStore.WriteEcRequestAtomic(_paths, ecReq);
+        }
+        catch (Exception ex)
+        {
+            return new UiActionResult(false, $"{writeErrPrefix}：{ex.Message}");
         }
 
-        var match = AutoRevertedRegex().Match(text);
-        if (!match.Success)
+        if (_dryRun)
         {
-            return string.Empty;
+            return new UiActionResult(true, $"{dryRunPrefix}：{Path.GetFileName(reqPath)}");
         }
 
-        string r = match.Groups[1].Value;
-        r = HeldRegex().Replace(r, "充到 $1% 后插电保持满 $2 分钟");
-        r = UnpluggedBeforeTargetRegex().Replace(r, "没充到就拔电满 $1 分钟");
-        r = UnpluggedAfterTargetRegex().Replace(r, "充到 $1% 后拔了电");
-        r = UnpluggedLegacyRegex().Replace(r, "充到后拔了电");
-        r = MaxDurationRegex().Replace(r, "到了最长 $1 小时");
-        return $"上次冲高已回落：{r}";
+        var (started, triggerErr) = ScheduledTaskTrigger.TriggerTask(IpcConstants.BatteryChargeTaskName);
+        if (!started)
+        {
+            return new UiActionResult(
+                false,
+                $"计划任务 {IpcConstants.BatteryChargeTaskName} 没有响应（{triggerErr ?? "未知错误"}）{taskErrSuffix}");
+        }
+
+        await WaitForRequestConsumedAsync(reqPath, ct).ConfigureAwait(false);
+        return new UiActionResult(true, successMsg);
     }
 
     private static async Task WaitForRequestConsumedAsync(string reqPath, CancellationToken ct)
@@ -417,80 +273,6 @@ public sealed partial class UiBackendService
             await Task.Delay(100, ct).ConfigureAwait(false);
         }
     }
-
-    private static UiModeView BuildModeView(ModeState modeState, int prefHours, DateTimeOffset nowUtc)
-    {
-        int resolvedHours = PowerPolicy.KeepRunningDurationHoursOptions.Contains(prefHours)
-            ? prefHours
-            : PowerPolicy.KeepRunningDefaultHours;
-
-        if (modeState.ParsedMode == AgentMode.KeepRunning &&
-            modeState.RunUntilUtc.HasValue &&
-            modeState.RunUntilUtc.Value > nowUtc)
-        {
-            var untilLocal = modeState.RunUntilUtc.Value.ToLocalTime();
-            int totalSec = (int)(modeState.RunUntilUtc.Value - nowUtc).TotalSeconds;
-            string left = totalSec >= 3600
-                ? $"{totalSec / 3600} 小时 {(totalSec % 3600) / 60} 分"
-                : $"{Math.Max(1, totalSec / 60)} 分钟";
-            return new UiModeView("run", resolvedHours, untilLocal.ToString("HH:mm"), left, modeState.RunUntilUtc.Value.ToString("O"));
-        }
-
-        return new UiModeView("normal", resolvedHours, null, null, null);
-    }
-
-    private static string BuildFlowText(bool acOnline, int? pct, int targetStop, WindowsBatteryTelemetry? win)
-    {
-        if (acOnline)
-        {
-            if (win is { ChargeMw: > 0 })
-            {
-                return $"接通电源 · 正在充电 {win.ChargeMw / 1000.0:F1} W";
-            }
-
-            if (pct.HasValue && pct.Value >= targetStop - 1)
-            {
-                return $"接通电源 · 已到 {targetStop}%，不再充";
-            }
-
-            return "接通电源 · 没在充电";
-        }
-
-        return win is { DischargeMw: > 0 }
-            ? $"使用电池 · 放电 {win.DischargeMw / 1000.0:F1} W"
-            : "使用电池";
-    }
-
-    private static UiBoostView BuildBoostView(BoostState? boost, DateTimeOffset nowUtc)
-    {
-        if (boost is not { Active: true })
-        {
-            return new UiBoostView(Active: false);
-        }
-
-        int? heldMinutes = boost.FullSinceUtc.HasValue
-            ? Math.Max(0, (int)(nowUtc - boost.FullSinceUtc.Value).TotalMinutes)
-            : null;
-        string? deadline = boost.DeadlineUtc.HasValue
-            ? boost.DeadlineUtc.Value.ToLocalTime().ToString("HH:mm")
-            : null;
-
-        return new UiBoostView(
-            Active: true,
-            Target: boost.TargetStop,
-            Hold: boost.FullHoldMinutes,
-            Held: heldMinutes,
-            FullSinceUtc: boost.FullSinceUtc?.ToString("O"),
-            Deadline: deadline);
-    }
-
-    private static string FormatPowerModeZh(WindowsPowerMode? mode) => mode switch
-    {
-        WindowsPowerMode.BestPowerEfficiency => "最佳能效",
-        WindowsPowerMode.Balanced => "平衡",
-        WindowsPowerMode.BestPerformance => "最佳性能",
-        _ => "–"
-    };
 
     private UiPrefs LoadPrefs() => ReadJsonSafe<UiPrefs>(_paths.PrefsJsonPath) ?? new UiPrefs();
 
@@ -518,22 +300,4 @@ public sealed partial class UiBackendService
             return default;
         }
     }
-
-    [GeneratedRegex(@"^Auto-reverted to .*?: (.*)$")]
-    private static partial Regex AutoRevertedRegex();
-
-    [GeneratedRegex(@"Held >= (\d+)% on AC for (\d+) minutes")]
-    private static partial Regex HeldRegex();
-
-    [GeneratedRegex(@"Unplugged for (?:>= )?(\d+) minutes(?: before reaching target)?")]
-    private static partial Regex UnpluggedBeforeTargetRegex();
-
-    [GeneratedRegex(@"Unplugged after reaching (\d+)%")]
-    private static partial Regex UnpluggedAfterTargetRegex();
-
-    [GeneratedRegex(@"Unplugged on battery")]
-    private static partial Regex UnpluggedLegacyRegex();
-
-    [GeneratedRegex(@"(?:Exceeded max duration|Max boost duration) \(([\d.]+)h\)(?: elapsed)?")]
-    private static partial Regex MaxDurationRegex();
 }
