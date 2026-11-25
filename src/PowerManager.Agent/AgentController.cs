@@ -29,24 +29,20 @@ public sealed class AgentController : IDisposable
     private readonly WaitableTimerHandle _timer = new();
     private readonly AgentMessageWindow _window = new();
     private readonly AgentNamedPipeServer _pipeServer;
+    private readonly AgentSystemActions _actions;
+    private readonly AgentAlarmScheduler _scheduler;
+    private readonly WakeSummaryCoordinator _wakeSummary;
 
     private ModeState _modeState;
     private bool _acOnline;
     private int _batteryPercent;
     private bool _lidClosed;
     private bool _displayOn = true;
-    private bool _sessionLocked;
 
     private ForcedSleepState? _forcedSleep;
     private DateTimeOffset? _normalLidSleepDueUtc;
     private DateTimeOffset? _commuteTempCheckDueUtc;
     private DateTimeOffset? _commuteTempReadDueUtc;
-
-    private DateTimeOffset? _awayStartUtc;
-    private int? _awayStartBattery;
-    private readonly List<string> _awayNotes = [];
-    private (string Title, string Body)? _pendingUnlockToast;
-    private readonly object _toastLock = new();
 
     public AgentController(AppPaths paths, string pipeName, bool dryRun)
     {
@@ -64,6 +60,9 @@ public sealed class AgentController : IDisposable
         _acOnline = ac ?? true;
         _batteryPercent = pct ?? 100;
 
+        _actions = new AgentSystemActions(_paths, _dryRun, _log, _errorLog);
+        _scheduler = new AgentAlarmScheduler(_paths, _timer);
+        _wakeSummary = new WakeSummaryCoordinator(_log, _errorLog, _actions.SendToastSafe, _cts.Token);
         _pipeServer = new AgentNamedPipeServer(EnqueueIpcAsync, _pipeName);
         _window.SystemEventReceived += OnSystemEvent;
     }
@@ -73,10 +72,10 @@ public sealed class AgentController : IDisposable
         ToastNotifierHelper.SetProcessAppUserModelId();
         _log.Info($"Agent starting (dryRun={_dryRun}, dataDir=\"{_paths.DataDir}\", pipe=\"{_pipeName}\")");
 
-        EnsureOriginalSnapshot();
+        _actions.EnsureOriginalSnapshot();
         EvaluateModeExpiryIfNeeded(DateTimeOffset.UtcNow);
-        ApplyCurrentPowerScheme("startup");
-        ApplyCurrentWindowsPowerMode("startup");
+        _actions.ApplyPowerScheme(_modeState.ParsedMode, _forcedSleep is not null, "startup");
+        _actions.ApplyWindowsPowerMode(_acOnline, _batteryPercent, "startup");
         ScheduleCommuteCheckIfNeeded(DateTimeOffset.UtcNow);
         RecomputeAndArmTimer(DateTimeOffset.UtcNow);
 
@@ -130,47 +129,51 @@ public sealed class AgentController : IDisposable
                 return new AgentIpcResponse(true, "ok", _modeState, _forcedSleep is not null, _paths.DataDir);
 
             case AgentIpcCommand.SetMode:
-                if (req.Mode == AgentMode.KeepRunning)
-                {
-                    int hours = req.DurationHours ?? PowerPolicy.KeepRunningDefaultHours;
-                    if (!PowerModeCalculator.IsValidKeepRunningDuration(hours))
-                    {
-                        return new AgentIpcResponse(false, $"不支持的保持运行时长：{hours} 小时（可选 2/4/8/12/24）。");
-                    }
-
-                    _modeState = ModeState.CreateKeepRunning(nowUtc, hours);
-                    _normalLidSleepDueUtc = null;
-                    ClearForcedSleep("switched to keep_running");
-                    PersistModeState();
-                    ApplyCurrentPowerScheme($"set keep_running {hours}h");
-                    ScheduleCommuteCheckIfNeeded(nowUtc);
-                    RecomputeAndArmTimer(nowUtc);
-                    _log.Info($"Mode switched to keep_running for {hours}h (until {_modeState.RunUntilUtc:yyyy-MM-ddTHH:mm:ssZ})");
-                    return new AgentIpcResponse(true, $"已切换至保持运行模式（{hours} 小时）。", _modeState, false, _paths.DataDir);
-                }
-                else
-                {
-                    _modeState = ModeState.CreateNormal(nowUtc);
-                    _commuteTempCheckDueUtc = null;
-                    _commuteTempReadDueUtc = null;
-                    PersistModeState();
-                    ApplyCurrentPowerScheme("set normal");
-                    if (SleepGuardEngine.ShouldTriggerNormalLidCloseSleep(AgentMode.Normal, _lidClosed, DisplayAndInputInterop.HasExternalActiveDisplay()))
-                    {
-                        _normalLidSleepDueUtc = nowUtc + PowerPolicy.NormalLidCloseSleepDelay;
-                    }
-                    RecomputeAndArmTimer(nowUtc);
-                    _log.Info("Mode switched to normal.");
-                    return new AgentIpcResponse(true, "已切换至普通模式。", _modeState, _forcedSleep is not null, _paths.DataDir);
-                }
+                return HandleSetModeCommand(req, nowUtc);
 
             case AgentIpcCommand.RestoreOriginal:
-                RestoreOriginalSettingsAndStop();
+                _actions.RestoreOriginalSettings();
+                _cts.Cancel();
                 return new AgentIpcResponse(true, "已恢复 Windows 原始电源设置并准备退出常驻。", _modeState, false, _paths.DataDir);
 
             default:
                 return new AgentIpcResponse(false, $"未知命令：{req.Command}");
         }
+    }
+
+    private AgentIpcResponse HandleSetModeCommand(AgentIpcRequest req, DateTimeOffset nowUtc)
+    {
+        if (req.Mode == AgentMode.KeepRunning)
+        {
+            int hours = req.DurationHours ?? PowerPolicy.KeepRunningDefaultHours;
+            if (!PowerModeCalculator.IsValidKeepRunningDuration(hours))
+            {
+                return new AgentIpcResponse(false, $"不支持的保持运行时长：{hours} 小时（可选 2/4/8/12/24）。");
+            }
+
+            _modeState = ModeState.CreateKeepRunning(nowUtc, hours);
+            _normalLidSleepDueUtc = null;
+            ClearForcedSleep("switched to keep_running");
+            _actions.PersistModeState(_modeState);
+            _actions.ApplyPowerScheme(_modeState.ParsedMode, _forcedSleep is not null, $"set keep_running {hours}h");
+            ScheduleCommuteCheckIfNeeded(nowUtc);
+            RecomputeAndArmTimer(nowUtc);
+            _log.Info($"Mode switched to keep_running for {hours}h (until {_modeState.RunUntilUtc:yyyy-MM-ddTHH:mm:ssZ})");
+            return new AgentIpcResponse(true, $"已切换至保持运行模式（{hours} 小时）。", _modeState, false, _paths.DataDir);
+        }
+
+        _modeState = ModeState.CreateNormal(nowUtc);
+        _commuteTempCheckDueUtc = null;
+        _commuteTempReadDueUtc = null;
+        _actions.PersistModeState(_modeState);
+        _actions.ApplyPowerScheme(_modeState.ParsedMode, _forcedSleep is not null, "set normal");
+        if (SleepGuardEngine.ShouldTriggerNormalLidCloseSleep(AgentMode.Normal, _lidClosed, DisplayAndInputInterop.HasExternalActiveDisplay()))
+        {
+            _normalLidSleepDueUtc = nowUtc + PowerPolicy.NormalLidCloseSleepDelay;
+        }
+        RecomputeAndArmTimer(nowUtc);
+        _log.Info("Mode switched to normal.");
+        return new AgentIpcResponse(true, "已切换至普通模式。", _modeState, _forcedSleep is not null, _paths.DataDir);
     }
 
     private void OnSystemEvent(PowerSystemEvent ev)
@@ -193,11 +196,10 @@ public sealed class AgentController : IDisposable
                     HandleBatteryPercentChanged(ev.Value, nowUtc);
                     break;
                 case PowerSystemEventKind.SessionLocked:
-                    _sessionLocked = true;
+                    _wakeSummary.OnSessionLocked();
                     break;
                 case PowerSystemEventKind.SessionUnlocked:
-                    _sessionLocked = false;
-                    FlushPendingToastIfUnlocked();
+                    _wakeSummary.OnSessionUnlocked();
                     break;
             }
 
@@ -221,7 +223,7 @@ public sealed class AgentController : IDisposable
 
         if (closed)
         {
-            MarkAwayStartIfNeeded(nowUtc);
+            _wakeSummary.MarkAwayStartIfNeeded(nowUtc, _batteryPercent);
             bool hasExt = DisplayAndInputInterop.HasExternalActiveDisplay();
             if (SleepGuardEngine.ShouldTriggerNormalLidCloseSleep(_modeState.ParsedMode, true, hasExt))
             {
@@ -234,7 +236,7 @@ public sealed class AgentController : IDisposable
             ClearForcedSleep("lid opened");
             if (_displayOn)
             {
-                TriggerWakeSummaryIfAway(nowUtc);
+                _wakeSummary.TriggerWakeSummaryIfAway(nowUtc, _batteryPercent);
             }
         }
     }
@@ -251,11 +253,11 @@ public sealed class AgentController : IDisposable
 
         if (!on)
         {
-            MarkAwayStartIfNeeded(nowUtc);
+            _wakeSummary.MarkAwayStartIfNeeded(nowUtc, _batteryPercent);
         }
         else if (!_lidClosed)
         {
-            TriggerWakeSummaryIfAway(nowUtc);
+            _wakeSummary.TriggerWakeSummaryIfAway(nowUtc, _batteryPercent);
         }
     }
 
@@ -268,7 +270,7 @@ public sealed class AgentController : IDisposable
 
         _acOnline = acOnline;
         _log.Info($"Power source changed: {(acOnline ? "AC" : "DC")}");
-        ApplyCurrentWindowsPowerMode("ac/dc changed");
+        _actions.ApplyWindowsPowerMode(_acOnline, _batteryPercent, "ac/dc changed");
         ScheduleCommuteCheckIfNeeded(nowUtc);
     }
 
@@ -279,12 +281,12 @@ public sealed class AgentController : IDisposable
 
         if (!_acOnline)
         {
-            ApplyCurrentWindowsPowerMode($"dc battery {percent}%");
+            _actions.ApplyWindowsPowerMode(_acOnline, _batteryPercent, $"dc battery {percent}%");
         }
 
         if (PowerModeCalculator.ShouldTriggerBatteryHistory(prev, percent))
         {
-            TriggerEcTask($"电量 {percent}%", nowUtc);
+            _actions.TriggerEcTask($"电量 {percent}%", nowUtc);
         }
     }
 
@@ -293,12 +295,8 @@ public sealed class AgentController : IDisposable
         DateTimeOffset nowUtc = DateTimeOffset.UtcNow;
         try
         {
-            bool frozen = _timer.ScheduledTargetUtc.HasValue &&
-                          WakeAlarmPlanner.IsTimerFrozen(_timer.ScheduledTargetUtc.Value, nowUtc);
-
-            if (frozen)
+            if (_scheduler.IsTimerFrozen(nowUtc, out double driftSec))
             {
-                double driftSec = (nowUtc - _timer.ScheduledTargetUtc!.Value).TotalSeconds;
                 _log.Info($"Timer frozen wake detected (drift={driftSec:F1}s, lidClosed={_lidClosed}, mode={_modeState.ParsedMode}, ac={_acOnline})");
 
                 if (_forcedSleep is not null)
@@ -315,8 +313,8 @@ public sealed class AgentController : IDisposable
             // 1. 保持运行到期检查（SLP-02）
             if (EvaluateModeExpiryIfNeeded(nowUtc))
             {
-                ApplyCurrentPowerScheme("keep_running expired");
-                SendToastSafe("保持运行到期", "已回到普通模式：插电闲置 1 小时睡，用电池 15 分钟睡，合盖 1 分钟睡", tag: "mode");
+                _actions.ApplyPowerScheme(_modeState.ParsedMode, _forcedSleep is not null, "keep_running expired");
+                _actions.SendToastSafe("保持运行到期", "已回到普通模式：插电闲置 1 小时睡，用电池 15 分钟睡，合盖 1 分钟睡", tag: "mode");
                 if (SleepGuardEngine.ShouldTriggerNormalLidCloseSleep(AgentMode.Normal, _lidClosed, DisplayAndInputInterop.HasExternalActiveDisplay()))
                 {
                     EnterForcedSleep("保持运行到期且合盖", nowUtc);
@@ -334,81 +332,16 @@ public sealed class AgentController : IDisposable
             }
 
             // 3. 通勤电池温度检查与 32 分钟闲置接管（SLP-05）
-            if (_commuteTempCheckDueUtc.HasValue && nowUtc >= _commuteTempCheckDueUtc.Value)
+            ProcessCommuteChecks(nowUtc);
+
+            // 4. 主动睡眠每 1 分钟检查与 2 分钟休眠兜底（SLP-10）
+            ProcessForcedSleepTick(nowUtc);
+
+            // 5. 检查冲高回落到期时间点，主动唤醒 EC 任务执行回落（CHG-02）
+            if (_scheduler.IsBoostRevertDue(_acOnline, nowUtc))
             {
-                _commuteTempCheckDueUtc = null;
-                if (_modeState.ParsedMode == AgentMode.KeepRunning && !_acOnline)
-                {
-                    TimeSpan idle = DisplayAndInputInterop.GetUserIdleDuration();
-                    if (SleepGuardEngine.ShouldTakeoverCommuteIdle(_modeState.ParsedMode, _acOnline, idle, _forcedSleep is not null))
-                    {
-                        EnterForcedSleep("通勤电池闲置 32 分钟接管", nowUtc);
-                    }
-                    else
-                    {
-                        TriggerEcTask("通勤查温", nowUtc);
-                        _commuteTempReadDueUtc = nowUtc + PowerPolicy.CommuteTempReadDelayAfterTrigger;
-                    }
-
-                    _commuteTempCheckDueUtc = nowUtc + PowerPolicy.CommuteTempCheckInterval;
-                }
+                _actions.TriggerEcTask("冲高到期回落检查", nowUtc);
             }
-
-            // 4. 10 秒后读取通勤电池温度结果（SLP-05）
-            if (_commuteTempReadDueUtc.HasValue && nowUtc >= _commuteTempReadDueUtc.Value)
-            {
-                _commuteTempReadDueUtc = null;
-                if (_modeState.ParsedMode == AgentMode.KeepRunning && !_acOnline && _forcedSleep is null)
-                {
-                    var state = AtomicFileStore.ReadJsonOrDefault<ChargeStateSnapshot>(_paths.StateJsonPath);
-                    TimeSpan idle = DisplayAndInputInterop.GetUserIdleDuration();
-                    var decision = SleepGuardEngine.EvaluateCommuteTemperature(
-                        state?.Ec.BatteryC,
-                        state?.UpdatedAtUtc,
-                        _lidClosed,
-                        idle,
-                        nowUtc);
-
-                    if (decision == CommuteTempDecision.TriggerOverheatSleep)
-                    {
-                        EnterForcedSleep($"电池过热 {state!.Ec.BatteryC:F1} °C", nowUtc);
-                    }
-                    else if (decision == CommuteTempDecision.SkipDueToActiveUser)
-                    {
-                        _log.Info($"Commute overheat ({state?.Ec.BatteryC:F1} C) skipped: lid open & active user (idle={idle.TotalSeconds:0}s)");
-                    }
-                }
-            }
-
-            // 5. 主动睡眠每 1 分钟检查与 2 分钟休眠兜底（SLP-10）
-            if (_forcedSleep is not null)
-            {
-                TimeSpan idle = DisplayAndInputInterop.GetUserIdleDuration();
-                var tickAction = SleepGuardEngine.EvaluateForcedSleepTick(_forcedSleep, _lidClosed, idle, nowUtc);
-                if (tickAction == ForcedSleepTickAction.AbortDueToUserActivity)
-                {
-                    _log.Info($"Forced sleep aborted: lid open & user active (idle={idle.TotalSeconds:0}s)");
-                    ClearForcedSleep("user active abort");
-                }
-                else if (tickAction == ForcedSleepTickAction.TriggerHibernate)
-                {
-                    _log.Warn($"Forced sleep timed out after 2 min (note=\"{_forcedSleep.TriggerNote}\"), invoking Hibernate fallback.");
-                    _awayNotes.Add("2 分钟未入睡转休眠");
-                    if (_dryRun)
-                    {
-                        _log.Info("[DRY-RUN] Skipped SetSuspendState(Hibernate).");
-                        _forcedSleep = SleepGuardEngine.ResetAfterHibernateRejected(_forcedSleep, nowUtc);
-                    }
-                    else if (!PowerSchemeInterop.TryHibernate())
-                    {
-                        _log.Warn("SetSuspendState(Hibernate) rejected by Windows; resetting timer for next retry.");
-                        _forcedSleep = SleepGuardEngine.ResetAfterHibernateRejected(_forcedSleep, nowUtc);
-                    }
-                }
-            }
-
-            // 6. 检查冲高回落到期时间点，主动唤醒 EC 任务执行回落（CHG-02）
-            TriggerBoostCheckIfDue(nowUtc);
 
             RecomputeAndArmTimer(nowUtc);
         }
@@ -418,64 +351,88 @@ public sealed class AgentController : IDisposable
         }
     }
 
-    private void RecomputeAndArmTimer(DateTimeOffset nowUtc)
+    private void ProcessCommuteChecks(DateTimeOffset nowUtc)
     {
-        var candidates = new List<AlarmCandidate>();
-
-        if (_modeState.ParsedMode == AgentMode.KeepRunning && _modeState.RunUntilUtc.HasValue)
+        if (_commuteTempCheckDueUtc.HasValue && nowUtc >= _commuteTempCheckDueUtc.Value)
         {
-            candidates.Add(new AlarmCandidate(AlarmKind.KeepRunningExpiry, _modeState.RunUntilUtc.Value));
-        }
-
-        if (_normalLidSleepDueUtc.HasValue)
-        {
-            candidates.Add(new AlarmCandidate(AlarmKind.NormalLidCloseSleep, _normalLidSleepDueUtc.Value));
-        }
-
-        if (_commuteTempCheckDueUtc.HasValue)
-        {
-            candidates.Add(new AlarmCandidate(AlarmKind.CommuteTempCheck, _commuteTempCheckDueUtc.Value));
-        }
-
-        if (_commuteTempReadDueUtc.HasValue)
-        {
-            candidates.Add(new AlarmCandidate(AlarmKind.CommuteTempReadResult, _commuteTempReadDueUtc.Value));
-        }
-
-        if (_forcedSleep is not null)
-        {
-            candidates.Add(new AlarmCandidate(AlarmKind.ForcedSleepCheck, nowUtc + PowerPolicy.ForcedSleepCheckInterval));
-        }
-
-        // 读取 state.json 中的冲高定时器点
-        var chargeState = AtomicFileStore.ReadJsonOrDefault<ChargeStateSnapshot>(_paths.StateJsonPath);
-        if (chargeState?.Boost.Active == true)
-        {
-            var b = chargeState.Boost;
-            if (b.DeadlineUtc.HasValue)
+            _commuteTempCheckDueUtc = null;
+            if (_modeState.ParsedMode == AgentMode.KeepRunning && !_acOnline)
             {
-                candidates.Add(new AlarmCandidate(AlarmKind.BoostDeadline, b.DeadlineUtc.Value));
-            }
-            if (_acOnline && b.FullSinceUtc.HasValue)
-            {
-                candidates.Add(new AlarmCandidate(AlarmKind.BoostFullHoldComplete, b.FullSinceUtc.Value.AddMinutes(b.FullHoldMinutes)));
-            }
-            if (!_acOnline && !b.ReachedTarget && b.UnpluggedSinceUtc.HasValue)
-            {
-                candidates.Add(new AlarmCandidate(AlarmKind.BoostUnpluggedRevert, b.UnpluggedSinceUtc.Value + PowerPolicy.BoostUnpluggedRevertDelay));
+                TimeSpan idle = DisplayAndInputInterop.GetUserIdleDuration();
+                if (SleepGuardEngine.ShouldTakeoverCommuteIdle(_modeState.ParsedMode, _acOnline, idle, _forcedSleep is not null))
+                {
+                    EnterForcedSleep("通勤电池闲置 32 分钟接管", nowUtc);
+                }
+                else
+                {
+                    _actions.TriggerEcTask("通勤查温", nowUtc);
+                    _commuteTempReadDueUtc = nowUtc + PowerPolicy.CommuteTempReadDelayAfterTrigger;
+                }
+
+                _commuteTempCheckDueUtc = nowUtc + PowerPolicy.CommuteTempCheckInterval;
             }
         }
 
-        var next = WakeAlarmPlanner.ComputeNextAlarm(candidates);
-        if (next is null)
+        if (_commuteTempReadDueUtc.HasValue && nowUtc >= _commuteTempReadDueUtc.Value)
         {
-            _timer.Cancel();
+            _commuteTempReadDueUtc = null;
+            if (_modeState.ParsedMode == AgentMode.KeepRunning && !_acOnline && _forcedSleep is null)
+            {
+                var state = AtomicFileStore.ReadJsonOrDefault<ChargeStateSnapshot>(_paths.StateJsonPath);
+                TimeSpan idle = DisplayAndInputInterop.GetUserIdleDuration();
+                var decision = SleepGuardEngine.EvaluateCommuteTemperature(
+                    state?.Ec.BatteryC,
+                    state?.UpdatedAtUtc,
+                    _lidClosed,
+                    idle,
+                    nowUtc);
+
+                if (decision == CommuteTempDecision.TriggerOverheatSleep)
+                {
+                    EnterForcedSleep($"电池过热 {state!.Ec.BatteryC:F1} °C", nowUtc);
+                }
+                else if (decision == CommuteTempDecision.SkipDueToActiveUser)
+                {
+                    _log.Info($"Commute overheat ({state?.Ec.BatteryC:F1} C) skipped: lid open & active user (idle={idle.TotalSeconds:0}s)");
+                }
+            }
+        }
+    }
+
+    private void ProcessForcedSleepTick(DateTimeOffset nowUtc)
+    {
+        if (_forcedSleep is null)
+        {
             return;
         }
 
-        DateTimeOffset targetUtc = next.DueAtUtc <= nowUtc ? nowUtc.AddSeconds(1) : next.DueAtUtc;
-        _timer.SetDueTimeUtc(targetUtc);
+        TimeSpan idle = DisplayAndInputInterop.GetUserIdleDuration();
+        var tickAction = SleepGuardEngine.EvaluateForcedSleepTick(_forcedSleep, _lidClosed, idle, nowUtc);
+        if (tickAction == ForcedSleepTickAction.AbortDueToUserActivity)
+        {
+            _log.Info($"Forced sleep aborted: lid open & user active (idle={idle.TotalSeconds:0}s)");
+            ClearForcedSleep("user active abort");
+        }
+        else if (tickAction == ForcedSleepTickAction.TriggerHibernate)
+        {
+            _log.Warn($"Forced sleep timed out after 2 min (note=\"{_forcedSleep.TriggerNote}\"), invoking Hibernate fallback.");
+            _wakeSummary.AddNote("2 分钟未入睡转休眠");
+            if (!_actions.TryHibernate())
+            {
+                _forcedSleep = SleepGuardEngine.ResetAfterHibernateRejected(_forcedSleep, nowUtc);
+            }
+        }
     }
+
+    private void RecomputeAndArmTimer(DateTimeOffset nowUtc) =>
+        _scheduler.RecomputeAndArm(
+            _modeState,
+            _acOnline,
+            _normalLidSleepDueUtc,
+            _commuteTempCheckDueUtc,
+            _commuteTempReadDueUtc,
+            _forcedSleep is not null,
+            nowUtc);
 
     private void EnterForcedSleep(string note, DateTimeOffset nowUtc)
     {
@@ -485,9 +442,9 @@ public sealed class AgentController : IDisposable
         }
 
         _forcedSleep = new ForcedSleepState(nowUtc, note);
-        _awayNotes.Add(note);
+        _wakeSummary.AddNote(note);
         _log.Info($"Entering forced sleep (10s display / 15s sleep): {note}");
-        ApplyCurrentPowerScheme($"forced sleep: {note}");
+        _actions.ApplyPowerScheme(_modeState.ParsedMode, forcedSleepActive: true, $"forced sleep: {note}");
     }
 
     private void ClearForcedSleep(string reason)
@@ -499,112 +456,7 @@ public sealed class AgentController : IDisposable
 
         _forcedSleep = null;
         _log.Info($"Cleared forced sleep ({reason})");
-        ApplyCurrentPowerScheme($"clear forced sleep: {reason}");
-    }
-
-    private void MarkAwayStartIfNeeded(DateTimeOffset nowUtc)
-    {
-        if (_awayStartUtc is not null)
-        {
-            return;
-        }
-
-        _awayStartUtc = nowUtc;
-        _awayStartBattery = _batteryPercent;
-        _awayNotes.Clear();
-    }
-
-    private void TriggerWakeSummaryIfAway(DateTimeOffset nowUtc)
-    {
-        if (_awayStartUtc is null)
-        {
-            return;
-        }
-
-        DateTimeOffset awayStart = _awayStartUtc.Value;
-        int? startBat = _awayStartBattery;
-        int endBat = _batteryPercent;
-        var notesSnapshot = _awayNotes.ToArray();
-
-        _awayStartUtc = null;
-        _awayStartBattery = null;
-        _awayNotes.Clear();
-
-        if (!WakeSummaryFormatter.ShouldNotify(awayStart, nowUtc))
-        {
-            return;
-        }
-
-        // 后台线程延迟 15 秒查询 wevtapi（docs/design.md §二.3）
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(PowerPolicy.WakeLogQueryDelay, _cts.Token).ConfigureAwait(false);
-                var (winStart, winEnd) = WakeSummaryFormatter.GetQueryWindow(awayStart, nowUtc);
-                var events = EventLogReaderInterop.QueryPowerEvents(winStart, winEnd);
-                var summary = WakeSummaryFormatter.AnalyzeAndFormat(
-                    new WakeSummaryInput(awayStart, nowUtc, startBat, endBat, notesSnapshot, events),
-                    TimeZoneInfo.Local);
-
-                _log.Info($"Wake summary: {summary.Title} | {summary.Body.Replace(Environment.NewLine, " / ")}");
-
-                if (_sessionLocked)
-                {
-                    lock (_toastLock)
-                    {
-                        _pendingUnlockToast = (summary.Title, summary.Body);
-                    }
-                }
-                else
-                {
-                    SendToastSafe(summary.Title, summary.Body, tag: "wake");
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // 正常退出
-            }
-            catch (Exception ex)
-            {
-                _errorLog.Error(ex.ToString());
-            }
-        });
-    }
-
-    private void FlushPendingToastIfUnlocked()
-    {
-        (string Title, string Body)? pending;
-        lock (_toastLock)
-        {
-            pending = _pendingUnlockToast;
-            _pendingUnlockToast = null;
-        }
-
-        if (pending.HasValue)
-        {
-            SendToastSafe(pending.Value.Title, pending.Value.Body, tag: "wake");
-        }
-    }
-
-    private void TriggerBoostCheckIfDue(DateTimeOffset nowUtc)
-    {
-        var state = AtomicFileStore.ReadJsonOrDefault<ChargeStateSnapshot>(_paths.StateJsonPath);
-        if (state?.Boost.Active != true)
-        {
-            return;
-        }
-
-        var b = state.Boost;
-        bool due =
-            (b.DeadlineUtc.HasValue && nowUtc >= b.DeadlineUtc.Value) ||
-            (_acOnline && b.FullSinceUtc.HasValue && nowUtc >= b.FullSinceUtc.Value.AddMinutes(b.FullHoldMinutes)) ||
-            (!_acOnline && !b.ReachedTarget && b.UnpluggedSinceUtc.HasValue && nowUtc >= b.UnpluggedSinceUtc.Value + PowerPolicy.BoostUnpluggedRevertDelay);
-
-        if (due)
-        {
-            TriggerEcTask("冲高到期回落检查", nowUtc);
-        }
+        _actions.ApplyPowerScheme(_modeState.ParsedMode, forcedSleepActive: false, $"clear forced sleep: {reason}");
     }
 
     private void ScheduleCommuteCheckIfNeeded(DateTimeOffset nowUtc)
@@ -628,119 +480,11 @@ public sealed class AgentController : IDisposable
             _modeState = next;
             _commuteTempCheckDueUtc = null;
             _commuteTempReadDueUtc = null;
-            PersistModeState();
+            _actions.PersistModeState(_modeState);
             _log.Info("KeepRunning expired; reverted to normal mode.");
         }
 
         return expired;
-    }
-
-    private void EnsureOriginalSnapshot()
-    {
-        if (File.Exists(_paths.OriginalJsonPath) || _dryRun)
-        {
-            return;
-        }
-
-        var snapshot = PowerSchemeInterop.CaptureOriginalSnapshot(DateTimeOffset.UtcNow);
-        AtomicFileStore.WriteJsonAtomic(_paths.OriginalJsonPath, snapshot);
-        _log.Info("Captured Windows original power settings snapshot.");
-    }
-
-    private void ApplyCurrentPowerScheme(string reason)
-    {
-        var target = PowerModeCalculator.GetTargetPowerScheme(_modeState.ParsedMode, _forcedSleep is not null);
-        if (_dryRun)
-        {
-            _log.Info($"[DRY-RUN] ApplySettings({reason}): ac={target.AcDisplaySec}/{target.AcSleepSec}s dc={target.DcDisplaySec}/{target.DcSleepSec}s");
-            return;
-        }
-
-        var changed = PowerSchemeInterop.ApplySettings(target);
-        if (changed.Count > 0)
-        {
-            _log.Info($"Applied scheme ({reason}): {string.Join(", ", changed)}");
-        }
-    }
-
-    private void ApplyCurrentWindowsPowerMode(string reason)
-    {
-        var target = PowerModeCalculator.GetWindowsPowerMode(_acOnline, _batteryPercent);
-        if (_dryRun)
-        {
-            _log.Info($"[DRY-RUN] SetUserPowerMode({reason}): ac={_acOnline} -> {target}");
-            return;
-        }
-
-        var current = PowerSchemeInterop.GetUserPowerMode(_acOnline);
-        if (current != target)
-        {
-            PowerSchemeInterop.SetUserPowerMode(_acOnline, target);
-            _log.Info($"Switched {(_acOnline ? "AC" : "DC")} power mode -> {target} ({reason})");
-        }
-    }
-
-    private void RestoreOriginalSettingsAndStop()
-    {
-        var original = AtomicFileStore.ReadJsonOrDefault<OriginalPowerSettings>(_paths.OriginalJsonPath);
-        if (original is not null && !_dryRun)
-        {
-            var restoreScheme = new PowerSchemeSettings(
-                original.Ac.Display, original.Ac.Sleep,
-                original.Dc.Display, original.Dc.Sleep,
-                original.Ac.Lid, original.Dc.Lid,
-                original.Ac.Button, original.Dc.Button);
-            PowerSchemeInterop.ApplySettings(restoreScheme);
-            _log.Info("Restored Windows original power settings.");
-        }
-        else
-        {
-            _log.Warn(_dryRun ? "[DRY-RUN] Skipped restoring original settings." : "original.json not found; skipping restore.");
-        }
-
-        _cts.Cancel();
-    }
-
-    private void PersistModeState()
-    {
-        if (!_dryRun)
-        {
-            AtomicFileStore.WriteJsonAtomic(_paths.ModeJsonPath, _modeState);
-        }
-    }
-
-    private void TriggerEcTask(string reason, DateTimeOffset nowUtc)
-    {
-        if (_dryRun)
-        {
-            _log.Info($"[DRY-RUN] Would trigger {IpcConstants.BatteryChargeTaskName} (reason=\"{reason}\")");
-            return;
-        }
-
-        AtomicFileStore.WriteEcRequestAtomic(_paths, new EcTaskRequest(EcTaskRequestKind.Trigger, reason, null, nowUtc));
-        var (started, err) = ScheduledTaskTrigger.TriggerTask(IpcConstants.BatteryChargeTaskName);
-        if (!started)
-        {
-            _log.Warn($"Failed to trigger {IpcConstants.BatteryChargeTaskName}: {err}");
-        }
-    }
-
-    private void SendToastSafe(string title, string body, string tag = "status")
-    {
-        if (_dryRun)
-        {
-            _log.Info($"[DRY-RUN] Toast (tag={tag}): {title} | {body}");
-            return;
-        }
-
-        try
-        {
-            ToastNotifierHelper.ShowToast(title, body, tag: tag);
-        }
-        catch (Exception ex)
-        {
-            _errorLog.Error($"Toast 发送失败：{ex}");
-        }
     }
 
     public void Dispose()
