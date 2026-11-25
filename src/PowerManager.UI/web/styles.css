@@ -111,6 +111,8 @@ h1 { font-size: 1.4rem; font-weight: 600; margin: 0; letter-spacing: .01em; }
 .tile-head { display: flex; align-items: center; justify-content: space-between; gap: .4rem; }
 .tile b { display: block; font-weight: 600; font-size: 1rem; }
 .tile span { display: block; font-size: .83rem; color: var(--ink2); margin-top: .12rem; }
+/* 策略数字占位（由 app.js 按 S.policy 填入）嵌在句子里，保持行内 */
+.tile span[data-policy] { display: inline; font-size: inherit; color: inherit; margin: 0; }
 .tile.on { background: var(--accent-soft); border-color: var(--accent); }
 .tile.on b { color: var(--accent); }
 .tile.draft { background: var(--chip); border: 1.5px dashed var(--accent); }

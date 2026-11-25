@@ -6,3 +6,6 @@ dist/
 *.user
 __pycache__/
 *.pyc
+
+# 本地排查案卷（含个人使用信息，不公开）
+docs/investigations/

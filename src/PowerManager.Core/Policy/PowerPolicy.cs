@@ -1,7 +1,7 @@
 namespace PowerManager.Core.Policy;
 
 /// <summary>
-/// 集中只读策略常量表（遵循 docs/conventions.md §二.1）。
+/// 集中只读策略常量表：用户可感知的策略数值只在此定义（ARCHITECTURE.md §5）。
 /// 日常充电基准阈值 75%–80% 受 ADR-0003 防遗忘约束保护，仅在此定义，不暴露外部可编辑配置。
 /// </summary>
 public static class PowerPolicy
@@ -10,7 +10,7 @@ public static class PowerPolicy
     public const int DefaultChargeStartPercent = 75;
     public const int DefaultChargeStopPercent = 80;
 
-    // --- 临时冲高参数边界与界面快捷档位（CHG-02） ---
+    // --- 临时冲高参数边界（CHG-02；界面快捷档位属于前端设计，定义在 web/app.js） ---
     public const int BoostTargetMinPercent = 85;
     public const int BoostTargetMaxPercent = 100;
     public const int BoostHysteresisPercent = 5;
@@ -22,15 +22,10 @@ public static class PowerPolicy
     public const double BoostMaxHoursDefault = 4.0;
     public static readonly TimeSpan BoostUnpluggedRevertDelay = TimeSpan.FromMinutes(10);
 
-    public static readonly int[] BoostTargetPresets = [85, 90, 95, 100];
-    public static readonly int[] BoostHoldMinutesPresets = [30, 60, 120];
-    public static readonly double[] BoostMaxHoursPresets = [2.0, 4.0, 8.0];
-
-    // --- 保持运行可选时长与界面快捷档位（SLP-02；0 表示直到手动改回） ---
+    // --- 保持运行可选时长（SLP-02；0 表示直到手动改回） ---
     public const int KeepRunningIndefiniteHours = 0;
     public const int KeepRunningMinHours = 1;
     public const int KeepRunningMaxHours = 24;
-    public static readonly int[] KeepRunningDurationHoursOptions = [2, 4, 8, 12, 24];
     public const int KeepRunningDefaultHours = 12;
 
     // --- 双模式关屏与睡眠超时（秒，0 表示从不；SLP-03 / SLP-04 / SLP-05） ---

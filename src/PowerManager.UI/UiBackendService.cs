@@ -83,7 +83,8 @@ public sealed class UiBackendService
             PowerMode: powerModeView,
             Battery: UiStateFormatter.BuildBatteryView(acOnline, pct, state, nowUtc),
             Boost: UiStateFormatter.BuildBoostView(state?.Boost, nowUtc),
-            BoostPrefs: UiStateFormatter.BuildBoostPrefsView(prefs));
+            BoostPrefs: UiStateFormatter.BuildBoostPrefsView(prefs),
+            Policy: PolicySnapshot.Current);
     }
 
     public async Task<UiActionResult> SetModeAsync(string mode, int? hours, CancellationToken ct = default)

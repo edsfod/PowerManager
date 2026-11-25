@@ -63,4 +63,5 @@ public sealed record UiStateView(
     [property: JsonPropertyName("power_mode")] UiPowerModeView PowerMode,
     [property: JsonPropertyName("battery")] UiBatteryView Battery,
     [property: JsonPropertyName("boost")] UiBoostView Boost,
-    [property: JsonPropertyName("boost_prefs")] UiBoostPrefsView BoostPrefs);
+    [property: JsonPropertyName("boost_prefs")] UiBoostPrefsView BoostPrefs,
+    [property: JsonPropertyName("policy")] PolicySnapshot Policy);

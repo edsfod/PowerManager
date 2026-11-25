@@ -26,7 +26,7 @@
    - `original.json` 保持与 v1 完全兼容的 JSON Schema，生产切换时只读导入原快照，避免覆盖真实 Windows 原始电源设置。
 
 ## 依据
-1. **编译期强制依赖隔离与 Windows 子系统匹配**：拆分为独立 exe 后，`Agent`、`UI`、`pmctl` 在编译期即无法引用 `Hardware.MateBook`，`BatteryCharge` 不携带 WebView2 依赖；同时 `Agent`/`UI` 使用 `WinExe` 消除登录与启动黑框，新增薄控制台 `pmctl.exe`（约百行代码、~0.2 MB、0 常驻内存）彻底规避 `WinExe + AttachConsole` 在 PowerShell / Git Bash 中不等待退出、提示符错位与重定向失效的缺陷。
+1. **编译期强制依赖隔离与 Windows 子系统匹配**：拆分为独立 exe 后，`Agent`、`UI`、`pmctl` 在编译期即无法引用 `Hardware.MateBook`，`BatteryCharge` 不携带 WebView2 依赖；同时 `Agent`/`UI` 使用 `WinExe` 消除登录与启动黑框，新增薄控制台 `pmctl.exe`（只做参数解析与 IPC 转发，体积小、无常驻进程）彻底规避 `WinExe + AttachConsole` 在 PowerShell / Git Bash 中不等待退出、提示符错位与重定向失效的缺陷。
 2. **S4U 计划任务的工程风险与收益比更优**：本项目日均 EC 触发仅约 30 次，1–2 秒冲高延迟与通勤 10 秒查温等待对体验和热保护均无实质影响；维持 S4U 计划任务可直接复用本机已验证的开机/登录/唤醒/插拔电触发器，避免引入 `LocalSystem` 常驻权限面、跨账户 Pipe ACL、文件所有权与升级停服摩擦。
 3. **数据与代码物理分离**：`original.json` 与 `history.log`/`ec.log` 属于不可再生资产，放入 `%LOCALAPPDATA%\PowerManager` 可避免仓库清理、重编译或迁往 `Program Files` 只读目录时误删或权限报错；而 `C:\ProgramData` 默认对普通用户只读，不适合作为普通权限 `Agent`/`UI` 的写入目录。
 

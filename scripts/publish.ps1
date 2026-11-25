@@ -18,6 +18,17 @@ if (-not $OutputDir) {
 }
 
 if (Test-Path $OutputDir) {
+    # Running binaries lock files in the output directory; fail early with instructions instead of
+    # a half-deleted dist/. Processes whose path cannot be read (e.g. elevated) are skipped.
+    $fullOutputDir = [IO.Path]::GetFullPath($OutputDir).TrimEnd('\') + '\'
+    $running = @(Get-Process -Name 'PowerManager.Agent', 'PowerManager.UI', 'PowerManager.BatteryCharge', 'pmctl' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -and $_.Path.StartsWith($fullOutputDir, [StringComparison]::OrdinalIgnoreCase) })
+    if ($running.Count -gt 0) {
+        $names = ($running | ForEach-Object { "$($_.ProcessName) (pid $($_.Id))" }) -join ', '
+        throw ("Processes are running from ${OutputDir}: $names. Close the PowerManager window and run " +
+            "'Stop-ScheduledTask -TaskName PowerManager-Agent; Stop-Process -Name PowerManager.Agent' " +
+            "in an elevated PowerShell first (see README: upgrade).")
+    }
     Remove-Item -Path $OutputDir -Recurse -Force
 }
 New-Item -Path $OutputDir -ItemType Directory -Force | Out-Null

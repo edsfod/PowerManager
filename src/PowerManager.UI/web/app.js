@@ -1,6 +1,7 @@
 const $ = id => document.getElementById(id);
 let S = null;
 const pick = { target: null, hold: null, maxh: null };
+// 快捷档位属于界面设计，留在前端；超出后端下发范围（S.policy）的档位不显示
 const RUN_HOUR_PRESETS = [2, 4, 8, 12, 24, 0];
 const runDraft = { active: false, hours: null };
 
@@ -67,6 +68,25 @@ const api = {
 function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+/* 策略数值一律取自后端下发的 S.policy（来源 PowerPolicy.cs），前端不手写数字；
+   UiPolicyConsistencyTests 会扫描本文件与 index.html 中手写的“数字 + 单位”。 */
+function fmtDur(sec) {
+  if (sec >= 3600 && sec % 3600 === 0) return `${sec / 3600} 小时`;
+  if (sec >= 60 && sec % 60 === 0) return `${sec / 60} 分钟`;
+  return `${sec} 秒`;
+}
+const chargeBand = P => `${P.charge_start}%–${P.charge_stop}%`;
+
+function applyPolicy(P) {
+  const setRange = (id, lo, hi) => { const r = $(id); r.min = lo; r.max = hi; };
+  setRange('r-hours', P.run_hours_min, P.run_hours_max);
+  for (const f of BOOST_FIELDS) setRange(f.range, P[f.lo], P[f.hi]);
+  document.querySelectorAll('[data-policy]').forEach(el => {
+    const key = el.dataset.policy;
+    el.textContent = key.endsWith('_sec') ? fmtDur(P[key]) : String(P[key]);
+  });
 }
 
 function chips(el, values, current, fmt, onPick) {
@@ -146,20 +166,28 @@ function renderModeSection() {
     if (sliderRow) sliderRow.classList.toggle('muted-slider', isIndefinite);
     if (!isIndefinite && Number(r.value) !== draftHours) r.value = draftHours;
     $('v-hours').textContent = isIndefinite ? '直到手动改回' : `${draftHours} 小时`;
-    chips($('hours'), RUN_HOUR_PRESETS, draftHours, v => (v === 0 ? '直到手动改回' : `${v} 小时`), v => {
+    const P = S.policy;
+    const runPresets = RUN_HOUR_PRESETS.filter(v => v === 0 || (v >= P.run_hours_min && v <= P.run_hours_max));
+    chips($('hours'), runPresets, draftHours, v => (v === 0 ? '直到手动改回' : `${v} 小时`), v => {
       runDraft.active = true;
       runDraft.hours = v;
       renderModeSection();
     });
   }
 
+  const P = S.policy;
   const showRunRules = run || draftForNewRun;
+  const sleepAfter = sec => (sec === 0 ? '不睡' : `${fmtDur(sec)}睡`);
+  const fallback = ['睡不下去', `${fmtDur(P.hibernate_fallback_sec)}后休眠（后台忙时只能休眠）`];
   const R = showRunRules
-    ? [['插电', '15 分钟关屏，不睡；合盖继续跑'], ['用电池', '5 分钟关屏，30 分钟没人操作才睡；电池到 40 °C 提前睡'],
-       ['睡不下去', '2 分钟后休眠（后台忙时只能休眠）']]
-    : [['合盖', '1 分钟后睡'], ['插电', '15 分钟关屏，1 小时睡'], ['用电池', '5 分钟关屏，15 分钟睡'],
-       ['睡不下去', '2 分钟后休眠（后台忙时只能休眠）']];
-  R.push(['电源模式', '插电 最佳性能；用电池 ≥ 50% 平衡、< 50% 最佳能效'],
+    ? [['插电', `${fmtDur(P.run_ac_display_sec)}关屏，${sleepAfter(P.run_ac_sleep_sec)}；合盖继续跑`],
+       ['用电池', `${fmtDur(P.run_dc_display_sec)}关屏，${fmtDur(P.run_dc_sleep_sec)}没人操作才睡；电池到 ${P.commute_temp_c} °C 提前睡`],
+       fallback]
+    : [['合盖', `${fmtDur(P.lid_sleep_delay_sec)}后睡`],
+       ['插电', `${fmtDur(P.normal_ac_display_sec)}关屏，${sleepAfter(P.normal_ac_sleep_sec)}`],
+       ['用电池', `${fmtDur(P.normal_dc_display_sec)}关屏，${sleepAfter(P.normal_dc_sleep_sec)}`],
+       fallback];
+  R.push(['电源模式', `插电 最佳性能；用电池 ≥ ${P.dc_balanced_min_pct}% 平衡、< ${P.dc_balanced_min_pct}% 最佳能效`],
          ['电源键', '不起作用（睡着时按会唤醒）']);
   $('rules').innerHTML = R.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
 }
@@ -172,12 +200,13 @@ function updateLiveCountdowns() {
   if (S.boost.active && S.boost.full_since_utc) {
     const held = Math.max(0, Math.floor((Date.now() - Date.parse(S.boost.full_since_utc)) / 60000));
     $('bo-bar').style.width = Math.min(100, 100 * held / Math.max(1, S.boost.hold)) + '%';
-    $('bo-text').textContent = `已充到，插着电保持 ${held}/${S.boost.hold} 分钟；拔电也会回到 75%–80%`;
+    $('bo-text').textContent = `已充到，插着电保持 ${held}/${S.boost.hold} 分钟；拔电也会回到 ${chargeBand(S.policy)}`;
   }
 }
 
 function render(s) {
   S = s;
+  applyPolicy(s.policy);
   // agent
   $('agent').classList.toggle('off', !s.agent);
   const drySuffix = s.dry_run ? ' (dry-run)' : '';
@@ -225,10 +254,10 @@ function render(s) {
     $('bo-deadline').textContent = bo.deadline ? `最迟 ${bo.deadline} 回落` : '';
     if (bo.held != null) {
       $('bo-bar').style.width = Math.min(100, 100 * bo.held / Math.max(1, bo.hold)) + '%';
-      $('bo-text').textContent = `已充到，插着电保持 ${bo.held}/${bo.hold} 分钟；拔电也会回到 75%–80%`;
+      $('bo-text').textContent = `已充到，插着电保持 ${bo.held}/${bo.hold} 分钟；拔电也会回到 ${chargeBand(s.policy)}`;
     } else {
       $('bo-bar').style.width = Math.min(100, 100 * Math.max(0, (b.pct ?? 0) - lo) / Math.max(1, bo.target - lo)) + '%';
-      $('bo-text').textContent = `正在充（${b.pct ?? '–'}%），充到后插着电保持 ${bo.hold} 分钟；拔电也会回到 75%–80%`;
+      $('bo-text').textContent = `正在充（${b.pct ?? '–'}%），充到后插着电保持 ${bo.hold} 分钟；拔电也会回到 ${chargeBand(s.policy)}`;
     }
   } else {
     pick.target ??= s.boost_prefs.target;
@@ -239,10 +268,12 @@ function render(s) {
 }
 
 const BOOST_FIELDS = [
-  { key: 'target', range: 'r-target', val: 'v-target', chips: 'b-target', presets: [85, 90, 95, 100], fmt: v => `${v}%` },
-  { key: 'hold',   range: 'r-hold',   val: 'v-hold',   chips: 'b-hold',   presets: [30, 60, 120],     fmt: v => `${v} 分钟` },
-  { key: 'maxh',   range: 'r-max',    val: 'v-max',    chips: 'b-max',    presets: [2, 4, 8],         fmt: v => `${v} 小时` },
+  { key: 'target', range: 'r-target', val: 'v-target', chips: 'b-target', lo: 'boost_target_min', hi: 'boost_target_max', presets: [85, 90, 95, 100], fmt: v => `${v}%` },
+  { key: 'hold',   range: 'r-hold',   val: 'v-hold',   chips: 'b-hold',   lo: 'boost_hold_min',   hi: 'boost_hold_max',   presets: [30, 60, 120],     fmt: v => `${v} 分钟` },
+  { key: 'maxh',   range: 'r-max',    val: 'v-max',    chips: 'b-max',    lo: 'boost_maxh_min',   hi: 'boost_maxh_max',   presets: [2, 4, 8],         fmt: v => `${v} 小时` },
 ];
+
+const boostPresets = f => f.presets.filter(v => v >= S.policy[f.lo] && v <= S.policy[f.hi]);
 
 function renderBoostControls() {
   for (const f of BOOST_FIELDS) {
@@ -250,7 +281,7 @@ function renderBoostControls() {
     const r = $(f.range);
     if (Number(r.value) !== cur) r.value = cur;
     $(f.val).textContent = f.fmt(cur);
-    chips($(f.chips), f.presets, cur, f.fmt, v => { pick[f.key] = v; renderBoostControls(); });
+    chips($(f.chips), boostPresets(f), cur, f.fmt, v => { pick[f.key] = v; renderBoostControls(); });
   }
 }
 
@@ -258,7 +289,8 @@ for (const f of BOOST_FIELDS) {
   $(f.range).addEventListener('input', e => {
     pick[f.key] = Number(e.target.value);
     $(f.val).textContent = f.fmt(pick[f.key]);
-    [...$(f.chips).children].forEach((b, i) => b.classList.toggle('on', f.presets[i] === pick[f.key]));
+    const shown = boostPresets(f);
+    [...$(f.chips).children].forEach((b, i) => b.classList.toggle('on', shown[i] === pick[f.key]));
   });
 }
 
@@ -327,7 +359,7 @@ $('t-run').onclick = () => {
   if (!S || S.mode.mode === 'run') return;
   if (!runDraft.active) {
     runDraft.active = true;
-    runDraft.hours = S.mode.hours ?? 12;
+    runDraft.hours = S.mode.hours ?? S.policy.run_hours_default;
     renderModeSection();
   }
 };
@@ -350,7 +382,7 @@ $('b-run-cancel').onclick = () => {
 };
 $('b-run-confirm').onclick = async () => {
   if (!S) return;
-  const hours = runDraft.hours ?? S.mode.hours ?? 12;
+  const hours = runDraft.hours ?? S.mode.hours ?? S.policy.run_hours_default;
   const btn = $('b-run-confirm');
   btn.disabled = true;
   try {

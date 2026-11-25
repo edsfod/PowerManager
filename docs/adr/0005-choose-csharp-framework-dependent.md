@@ -18,6 +18,6 @@
 3. **优于 Rust 的工程性价比**：Rust 在调用 WMI `ExecMethod`（`VARIANT` / `SAFEARRAY`）及 WebView2 回调时需编写大量 `unsafe` 代码，且 `x86_64-pc-windows-gnu` 目标在部分 Windows 生态库上存在链接兼容风险；换取的仅约 20 MB 常驻内存差异在实际使用中无感知价值。
 
 ## 影响
-- 新增独立 `.NET 10` 开发工具链（按本机 VS Code 规范关联独立 Profile，不混用 MSYS2 `C-Win`）。
+- 新增独立 `.NET 10` 开发工具链，与既有 MSYS2 原生工具链互不依赖。
 - 后续部署包依赖目标机器已安装的 `.NET 10 Desktop Runtime`（本机已具备）。
 - 若未来确需在无 `.NET` 运行时的全新 Windows 机器上单文件免环境运行，只需补装 MSVC Build Tools 并调整工程配置即可切换至 Native AOT 或自包含（Self-Contained）发布，无需重写业务逻辑。

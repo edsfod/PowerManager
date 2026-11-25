@@ -13,9 +13,9 @@
 | **常驻调度（`agent`）** | `PowerManager.Agent.exe`（`WinExe`） | 普通用户（不提权） | 计划任务 `PowerManager-Agent` 登录时启动（无超时限制 `PT0S`、多实例 `IgnoreNew`、允许电池运行、失败每 1 分钟重启最多 5 次）；纯事件驱动阻塞等待 | 监听系统电源/合盖/屏幕/电量/锁屏通知；按模式修改超时与电源模式；维护单一 Waitable Timer；执行休眠兜底与醒来通知；提供 Named Pipe 控制接口；按需拉起 EC 任务（10 秒后读取温度结果） |
 | **硬件控制任务（`battery-charge`）** | `PowerManager.BatteryCharge.exe`（`Exe`） | 管理员（S4U 最高权限） | 计划任务 `Battery-ChargeLimit`（执行限时 `PT2M`、允许电池运行、多实例 `Queue`），在开机、登录、唤醒（`Power-Troubleshooter 1`）、插拔电（`Kernel-Power 105`）及被显式触发时运行一次即退出 | 消费 `<DataDir>/requests/` 请求；调用硬件适配器读写充电阈值与温度传感器；执行冲高与回落决策；写入 `state.json` 与历史记录 |
 | **交互界面（`ui`）** | `PowerManager.UI.exe`（`WinExe`） | 普通用户 | 由桌面/开始菜单快捷方式 `PowerManager.lnk` 按需启动（WebView2 渲染前端） | 展示当前模式、充电阈值与温度状态；通过 Named Pipe 向 `agent` 切换模式，通过请求文件触发 `Battery-ChargeLimit` 发起临时冲高 |
-| **命令行工具（`pmctl`）** | `pmctl.exe`（`Exe`） | 普通用户（直写 EC 时可提权） | 终端按需手动执行 | 薄控制台入口，统一承接 `status`、`restore-original`、`boost` 等终端查看与控制命令，避免 `WinExe` 后台进程在终端输出错位 |
+| **命令行工具（`pmctl`）** | `pmctl.exe`（`Exe`） | 普通用户（不提权，不直接访问 EC；需在管理员终端直写 EC 时改用 `PowerManager.BatteryCharge.exe --status` / `--boost`） | 终端按需手动执行 | 薄控制台入口，统一承接 `status`、`mode`、`boost`、`restore-original`、`paths` 终端查看与控制命令，避免 `WinExe` 后台进程在终端输出错位 |
 
-**依赖方向约束**：编译期强制隔离——`PowerManager.Agent`、`PowerManager.UI`、`pmctl` 仅引用 `Core` 与 `Platform`，严禁引用 `PowerManager.Hardware.MateBook` 或包含厂商专有 WMI 字节/EC 寄存器逻辑；`PowerManager.BatteryCharge` 仅引用 `Core` 与 `Hardware.MateBook`，不携带 WebView2 依赖。普通权限进程仅通过 `<DataDir>/requests/` 原子 JSON 请求文件 + 触发 `Battery-ChargeLimit` 与状态文件 `state.json` 和硬件任务交互。
+**依赖方向约束**：编译期强制隔离——`PowerManager.Agent`、`PowerManager.UI`、`pmctl` 仅引用 `Core` 与 `Platform`，严禁引用 `PowerManager.Hardware.MateBook` 或包含厂商专有 WMI 字节/EC 寄存器逻辑；`PowerManager.BatteryCharge` 引用 `Core`、`Platform` 与 `Hardware.MateBook`（是唯一引用硬件适配层的项目），不携带 WebView2 依赖。普通权限进程仅通过 `<DataDir>/requests/` 原子 JSON 请求文件 + 触发 `Battery-ChargeLimit` 与状态文件 `state.json` 和硬件任务交互。
 
 ---
 
@@ -69,11 +69,42 @@
 本节定义 `ui` 与 `pmctl` 的**进程边界与跨进程通信契约**；前端信息架构、窗口尺寸策略、草稿状态机与布局验收门禁见 [ui-design.md](ui-design.md)：
 
 - **界面宿主与标识**：`PowerManager.UI.exe` 通过 `Microsoft.Web.WebView2` 加载内嵌静态前端（用户数据目录隔离于 `<DataDir>/ui/webview2/`）；启动时设置 `AppUserModelID = "PowerManager"` 并以按管道名隔离的单实例 `Mutex`（`Local\PowerManager.UI.<pipeName>`）防止重复多开（重复启动激活已有窗口）；支持 `--debug`、`--data-dir`、`--pipe-name`、`--dry-run` 与 `--smoke-test` 参数。
-- **前端桥接契约**：宿主与前端通过 WebView2 JSON-RPC 通信（前端 `{ id, method, params }` ↔ 宿主 `{ id, result, error }`），宿主在窗口激活与窗口态变化时分别推送 `{ event: "focus" }` 与 `{ event: "window_state", maximized }`。桥接方法共 10 项：`get_state`（返回 `UiStateView`）、`set_mode`（`mode`, `hours`）、`boost`（`target`, `hold`, `maxh`）、`refresh_ec`、`open_data_dir`、`start_agent`、`set_expanded`（`expanded`）、`set_content_height`（`height`）、`close_window`、`smoke_ready`（其余操作返回 `UiActionResult { ok, msg? }`）。
-- **状态读取**：界面与 `pmctl` 只读展示 `<DataDir>/agent/mode.json`、`<DataDir>/battery-charge/state.json`，以及非提权的当前电源模式（`powrprof`）与标准 `BatteryStatus`；界面用户偏好保存于 `<DataDir>/ui/prefs.json`。
-- **跨进程通信（IPC）契约（[ADR-0006](adr/0006-csharp-architecture-ipc-and-data-dir.md)）**：界面与 `pmctl` 以普通权限运行，不直接修改系统设置，也不弹出 UAC 确认框：
-  - **`ui / pmctl ↔ agent`（同步 Named Pipe）**：`agent` 监听仅限当前用户 SID 访问的 Named Pipe（`\\.\pipe\PowerManager.Agent`），接收 JSON 命令（切换普通/保持运行模式、查询实时状态含主动睡眠状态、执行 `--restore-original` 停用恢复），投递至主消息循环执行后同步返回结构化 JSON 回执（成功/失败原因）。
-  - **`agent / ui / pmctl → Battery-ChargeLimit`（原子请求文件 + 计划任务队列）**：调用方在 `<DataDir>/requests/` 目录先写临时文件再原子重命名为 `<utc-ticks>-<guid>.json`（携带按需刷新触发原因如 `ui-refresh`，或临时冲高参数：目标 `85%–100%`、保持 `15–180` 分钟、最长 `1–12` 小时），随后触发计划任务 `Battery-ChargeLimit`（由 `MultipleInstances=Queue` 保证串行执行）。提权任务消费请求时强制校验数值白名单边界并拒绝符号链接/重解析点，消费完毕即删除请求文件。
+- **前端桥接契约**：宿主与前端通过 WebView2 JSON-RPC 通信（前端 `{ id, method, params }` ↔ 宿主 `{ id, result, error }`），宿主在窗口激活与窗口态变化时分别推送 `{ event: "focus" }` 与 `{ event: "window_state", maximized }`。路由实现见 `WebRpcBridge.cs`，方法如下（除 `get_state` 外均返回 `UiActionResult { ok, msg? }`）：
+
+  | 方法 | 参数 | 说明 |
+  |---|---|---|
+  | `get_state` | — | 返回 `UiStateView`（顶层字段：`agent`、`dry_run`、`forced_sleep`、`rules_expanded`、`data_dir`、`mode`、`power_mode`、`battery`、`boost`、`boost_prefs`、`policy`；子结构定义见 `UiModels.cs`，`policy` 为界面用到的策略数值，定义见 `Core/Policy/PolicySnapshot.cs`） |
+  | `set_mode` | `mode`（`"normal"` / `"run"`）、`hours`（`0` 表示直到手动改回，或 `1–24`） | 经 Named Pipe 转发为 `SetMode` |
+  | `boost` | `target`、`hold`（分钟）、`maxh`（小时） | 写入冲高请求文件并触发 `Battery-ChargeLimit` |
+  | `refresh_ec` | — | 写入 `reason = "ui-refresh"` 的触发请求并触发 `Battery-ChargeLimit` |
+  | `open_data_dir` / `start_agent` | — | 打开 `<DataDir>`；拉起计划任务 `PowerManager-Agent` |
+  | `set_expanded` / `set_content_height` | `expanded` / `height` | 规则面板展开状态；前端上报内容高度供宿主贴合窗口 |
+  | `close_window` / `smoke_ready` | — | 关闭窗口；`--smoke-test` 下前端就绪信号 |
+
+- **状态读取**：界面与 `pmctl` 只读展示 `<DataDir>/agent/mode.json`、`<DataDir>/battery-charge/state.json`，以及非提权的当前电源模式（`powrprof`）与标准 `BatteryStatus`；界面用户偏好保存于 `<DataDir>/ui/prefs.json`（字段见 §五）。
+- **跨进程通信（IPC）契约（[ADR-0006](adr/0006-csharp-architecture-ipc-and-data-dir.md)）**：界面与 `pmctl` 以普通权限运行，不弹出 UAC 确认框；正常情况下系统电源设置只由 `agent` 修改。唯一例外是 `pmctl restore-original` 在 `agent` 未运行（管道不可达）时，直接按 `original.json` 写回 Windows 电源设置。
+  - **`ui / pmctl ↔ agent`（同步 Named Pipe）**：`agent` 监听仅限当前用户 SID 访问的 Named Pipe（`\\.\pipe\PowerManager.Agent`，可用 `--pipe-name` 覆盖）。每次连接只交换一轮：客户端写一行 UTF-8 JSON 请求，`agent` 投递至主消息循环执行后写回一行 JSON 响应。契约定义见 `Core/Contracts/IpcContracts.cs`：
+
+    | 方向 | 字段 | 取值 |
+    |---|---|---|
+    | 请求 | `command` | `"Ping"` / `"GetStatus"` / `"SetMode"` / `"RestoreOriginal"` |
+    | 请求 | `mode` | 仅 `SetMode`：`"Normal"` / `"KeepRunning"`（注意与 `mode.json` 的 `normal` / `keep_running` 写法不同） |
+    | 请求 | `duration_hours` | 仅 `SetMode` + `KeepRunning`：`0` 或 `1–24`，缺省按默认时长 |
+    | 响应 | `ok`、`message` | 是否成功；人类可读结果或失败原因 |
+    | 响应 | `mode_state` | 当前 `mode.json` 内容（字段见 §五） |
+    | 响应 | `forced_sleep_active`、`data_dir` | 是否处于主动睡眠；`agent` 实际使用的数据目录 |
+
+    `RestoreOriginal` 会写回 `original.json` 并令 `agent` 进程退出，但**不会**禁用计划任务 `PowerManager-Agent`；下次登录时 `agent` 重新启动并重新应用当前模式的电源设置。
+  - **`agent / ui / pmctl → Battery-ChargeLimit`（原子请求文件 + 计划任务队列）**：调用方在 `<DataDir>/requests/` 目录先写临时文件再原子重命名为 `<utc-ticks:D20>-<guid>.json`，随后触发计划任务 `Battery-ChargeLimit`（由 `MultipleInstances=Queue` 保证串行执行）。请求字段：
+
+    | 字段 | 取值 |
+    |---|---|
+    | `kind` | `"Trigger"`（仅刷新/记录）或 `"Boost"`（发起临时冲高） |
+    | `reason` | 非空，≤ 120 字符（如 `ui-refresh`、`电量 75%`、`通勤查温`、`pmctl boost 95%`） |
+    | `boost` | `kind = "Boost"` 时必填，`"Trigger"` 时必须为空：`{ target_stop, hold_minutes, max_hours }`，边界取自 `PowerPolicy`（与 `CHG-02` 一致） |
+    | `created_at_utc` | 请求创建时间（ISO 8601） |
+
+    提权任务按文件名顺序消费请求：强制校验白名单边界，拒绝符号链接/重解析点，校验失败的请求记入 `ec.log` 后丢弃；无论成败，消费完毕即删除请求文件。同一批次存在多条冲高请求时以最后一条为准。
 
 ---
 
@@ -83,7 +114,7 @@
 
 | 文件（相对于 `<DataDir>`） | 类型 | 用途与回滚机制 |
 |---|---|---|
-| `agent/original.json` | 持久 | 首次改动电源设置前保存的 Windows 原始超时与动作快照（Schema 与 v1 兼容，支持切换时只读导入），供 `pmctl restore-original` 一键恢复并停用 |
+| `agent/original.json` | 持久 | 首次改动电源设置前保存的 Windows 原始超时与动作快照（Schema 与 v1 兼容，支持切换时只读导入），供 `pmctl restore-original` 一键恢复（同时令 `agent` 退出，但不禁用其计划任务） |
 | `agent/mode.json` | 持久 | 当前模式（普通 / 保持运行）与保持运行到期时间戳 |
 | `agent/agent.log` / `error.log` | 日志 | 常驻事件流水（含醒来通知内容，UTC，超 1 MB 轮换）与异常堆栈 |
 | `battery-charge/state.json` | 缓存 | 最新 EC 读数、冲高目标与保持计时状态 |
@@ -91,6 +122,22 @@
 | `requests/*.json` | 瞬态 | 普通权限进程投递给 `Battery-ChargeLimit` 的原子 JSON 触发/冲高请求文件，消费后删除 |
 | `ui/prefs.json` | 持久 | 界面用户偏好（保持运行时长、冲高默认参数、规则面板展开状态） |
 | `ui/webview2/` | 缓存 | WebView2 运行时用户数据目录（与可执行目录隔离） |
+
+**状态文件字段**（JSON，时间戳均为 UTC ISO 8601，读取时字段名大小写不敏感；类型定义见 `Core/Models/` 与 `UI/UiModels.cs`，向后兼容由 `SchemaCompatibilityTests` 守护）：
+
+| 文件 | 字段 |
+|---|---|
+| `agent/original.json` | `ac` / `dc`：各含 `display`、`sleep`（秒，`0` 为从不）、`lid`、`button`（Windows 电源动作枚举值）；`saved_at_utc` |
+| `agent/mode.json` | `mode`（`"normal"` / `"keep_running"`）；`run_until_utc`（保持运行到期时刻，`null` 表示直到手动改回或普通模式）；`changed_at_utc` |
+| `battery-charge/state.json` | `updated_at_utc`；`ec`（`hw_ok`、`hw_start`、`hw_stop`、`battery_c`、`system_w`、`charge_ma`、`sensors_c`、`hottest_c` 及原始字段 `charge_mode_raw`、`resume_flag_raw`，读取失败的项为 `null`）；`os_power`（`ac_online`、`percent`）；`boost`（`active`、`target_start`、`target_stop`、`full_hold_minutes`、`max_total_hours`、`started_at_utc`、`deadline_utc`、`full_since_utc`、`reached_target`、`unplugged_since_utc`、`reverted_at_utc`、`last_reason`）；`target`（`[启充, 停充]`）；`win`（标准 `BatteryStatus` 快照，可为 `null`）；`run_reason` |
+| `ui/prefs.json` | `hours`、`boost_target`、`boost_hold`、`boost_maxh`、`rules_expanded` |
+
+**失败语义**：`Battery-ChargeLimit` 写阈值后读回不一致时，在 `ec.log` 记 `MISMATCH`、把堆栈写入 `error.log`，并以退出码 `2` 结束，**不更新** `state.json`；其他异常以退出码 `1` 结束。因此界面上"EC 上次更新时间"停止前进，是硬件任务失败的主要外部信号。
+
+**回滚边界**：Windows 电源设置只在用户主动停用（`pmctl restore-original` 或卸载）时按 `original.json` 恢复，以下情况刻意不回滚：
+- **`agent` 异常退出**：已写入的模式设置保持不变，作为兜底，等计划任务重启 `agent`（失败后每 1 分钟重试，最多 5 次）。`agent` 启动时会按当前模式重写一次设置，因此若崩溃发生在主动睡眠期间，临时的 10 秒关屏 / 15 秒睡眠超时会一直保留到 `agent` 重新启动。
+- **EC 阈值**：重启后 EC 会复位为 `95–100`，而目标始终是锁定 `75–80`，所以不保存也不恢复“原始阈值”，由开机、唤醒等触发器重新写入。
+- **验证脚本**：`scripts/` 下的脚本若临时修改系统设置，须用 `try…finally` 在退出时恢复，与主程序的回滚机制无关。
 
 ---
 
@@ -104,28 +151,28 @@
 
 ## 七、 需求追踪矩阵（Traceability Matrix）
 
-可通过 [verify_doc_traceability.py](../scripts/verify_doc_traceability.py) 自动校验本矩阵与 [requirements.md](requirements.md) 的编号集合完全一致：
+可通过 [verify_doc_traceability.py](../scripts/verify_doc_traceability.py) 自动校验本矩阵与 [requirements.md](requirements.md) 的**编号集合**完全一致（脚本不校验各行内容是否与代码相符）。“验证方式”列中的测试均位于 `tests/PowerManager.Tests/`，写作 `测试类（方法名前缀）`：
 
 | 需求编号 | 设计实现机制 | 归属模块 | 验证方式 |
 |---|---|---|---|
-| `SLP-01` | UI 向常驻发起异步模式切换请求，无自动实验检测 | `ui` / `agent` | 纯函数单测 + 手动切换核验 |
-| `SLP-02` | `mode.json` 持久化到期时间 + Waitable Timer 到点回落普通模式 | `agent` | 纯函数单测 + 状态检查 |
-| `SLP-03` | 普通模式通过 `powrprof.dll` 写入插电/电池关屏与睡眠超时 | `agent` | 纯函数单测 + `--status` 核验 |
-| `SLP-04` | 保持运行插电设置 15 分钟关屏、睡眠设为从不 | `agent` | 纯函数单测 + `--status` 核验 |
-| `SLP-05` | 保持运行电池合盖不采取操作、30 分钟睡眠、每 3 分钟读温度 ≥ 40 °C 触发睡眠 | `agent` / `battery-charge` | 纯函数单测 + 温度触发测试 |
-| `SLP-06` | 合盖且 `QueryDisplayConfig` 无外接活动屏 1 分钟后临时缩短超时 | `agent` | 纯函数单测 + 实机合盖测试 |
-| `SLP-07` | 闲置关屏超时独立于睡眠超时（现代待机仅熄屏不冻结后台） | `agent` | [verify_power_boundaries.py](../scripts/verify_power_boundaries.py) |
-| `SLP-08` | 电源键系统动作设为“不采取任何操作” | `agent` | `--status` + [verify_power_boundaries.py](../scripts/verify_power_boundaries.py) |
+| `SLP-01` | UI / `pmctl` 经同步 Named Pipe 向常驻发起模式切换，无自动实验检测 | `ui` / `agent` | `AgentNamedPipeIntegrationTests` + 手动切换核验 |
+| `SLP-02` | `mode.json` 持久化到期时间 + Waitable Timer 到点回落普通模式并发 Toast | `agent` | `PowerModeCalculatorTests`（`EvaluateModeExpiry_`、`IsValidKeepRunningDuration_`）+ `pmctl status` |
+| `SLP-03` | 普通模式通过 `powrprof.dll` 写入插电/电池关屏与睡眠超时 | `agent` | `PowerModeCalculatorTests`（`GetTargetPowerScheme_NormalMode_`）+ `pmctl status` |
+| `SLP-04` | 保持运行插电设置 15 分钟关屏、睡眠设为从不 | `agent` | `PowerModeCalculatorTests`（`GetTargetPowerScheme_KeepRunningMode_`）+ `pmctl status` |
+| `SLP-05` | 保持运行电池合盖不采取操作、30 分钟睡眠、每 3 分钟读温度 ≥ 40 °C 触发睡眠 | `agent` / `battery-charge` | `SleepGuardEngineTests`（`EvaluateCommuteTemperature_`、`ShouldTakeoverCommuteIdle_`）+ 实机温度触发 |
+| `SLP-06` | 合盖且 `QueryDisplayConfig` 无外接活动屏 1 分钟后临时缩短超时 | `agent` | `SleepGuardEngineTests`（`ShouldTriggerNormalLidCloseSleep_`）、`PowerModeCalculatorTests`（`GetTargetPowerScheme_ForcedSleep_`）、`PlatformStorageAndXmlTests`（`DisplayAndInputInterop_`）+ 实机合盖 |
+| `SLP-07` | 闲置关屏超时独立于睡眠超时（现代待机仅熄屏不冻结后台） | `agent` | `verify_power_boundaries.py heartbeat` |
+| `SLP-08` | 电源键系统动作设为“不采取任何操作” | `agent` | `PowerModeCalculatorTests`（`GetTargetPowerScheme_NormalMode_`）+ `pmctl status` + [verify_power_boundaries.py](../scripts/verify_power_boundaries.py) |
 | `SLP-09` | 不劫持系统关机流程，保留原生关机语义 | `agent` | 实机开始菜单关机核验 |
-| `SLP-10` | 主动触发睡眠 2 分钟后仍唤醒则调用 `SetSuspendState(Hibernate)` | `agent` | 纯函数单测 + 高负载合盖实测 |
-| `SLP-11` | Waitable Timer 迟到 > 30 秒判定冻结醒来，若合盖且非“保持运行+插电”，2 分钟后重睡或休眠 | `agent` | 纯函数单测 + 实机唤醒核验 |
-| `PWR-01` | 交流电事件触发 `PowerSetUserConfiguredACPowerMode` 为 `Best Performance` | `agent` | `--status` + 拔插电切换核验 |
-| `PWR-02` | 电池电量变化通知跨过 50% 时调用 `PowerSetUserConfiguredDCPowerMode` | `agent` | 纯函数单测 + 电量阈值核验 |
-| `CHG-01` | `03 10` 写入 `75–80%`，S4U 计划任务于开机/登录/唤醒/插拔电时恢复 | `battery-charge` | 纯函数单测 + [verify_wmi_readonly.py](../scripts/verify_wmi_readonly.py) |
-| `CHG-02` | 冲高写入 `(上限-5)%–上限%`，Waitable Timer 与插拔电触发 4 条件回落 | `battery-charge` / `agent` | 纯函数单测（`decide()`）+ `--status` |
-| `CHG-03` | 电量每变 5%、插拔电、唤醒及写阈值时追加 `history.log` 与 `ec.log` | `battery-charge` / `agent` | 检查 `history.log` 与 `ec.log` |
-| `NTF-01` | 开盖亮屏延后 15 秒查 `wevtapi`，解锁后通过 .NET 原生 WinRT Toast API 发通知 | `agent` | 合盖 >1 分钟开盖实测 + `agent.log` |
-| `NFR-01` | 常驻阻塞等待 Win32 事件 + 单一 Waitable Timer；EC 任务去定时化 | `agent` / `battery-charge` | 计划任务触发器检查 |
+| `SLP-10` | 主动触发睡眠 2 分钟后仍唤醒则调用 `SetSuspendState(Hibernate)` | `agent` | `SleepGuardEngineTests`（`EvaluateForcedSleepTick_`、`ResetAfterHibernateRejected_`）+ 高负载合盖实测 |
+| `SLP-11` | Waitable Timer 迟到 > 30 秒判定冻结醒来，若合盖且非“保持运行+插电”，2 分钟后重睡或休眠 | `agent` | `WakeAlarmPlannerTests`（`IsTimerFrozen_`）、`SleepGuardEngineTests`（`ShouldTriggerUnexpectedWakeFallback_`）+ 实机唤醒核验 |
+| `PWR-01` | 交流电事件触发 `PowerSetUserConfiguredACPowerMode` 为 `Best Performance` | `agent` | `PowerModeCalculatorTests`（`GetWindowsPowerMode_`）+ `pmctl status` |
+| `PWR-02` | 电池电量变化通知跨过 50% 时调用 `PowerSetUserConfiguredDCPowerMode` | `agent` | `PowerModeCalculatorTests`（`GetWindowsPowerMode_`）+ 电量阈值核验 |
+| `CHG-01` | `03 10` 写入 `75–80%`，S4U 计划任务于开机/登录/唤醒/插拔电时恢复 | `battery-charge` | `ChargeDecisionEngineTests`（`Decide_WhenInactive_`）、`MateBookWmiCodecTests` + [verify_wmi_readonly.py](../scripts/verify_wmi_readonly.py) |
+| `CHG-02` | 冲高写入 `(上限-5)%–上限%`，Waitable Timer 与插拔电触发 4 条件回落 | `battery-charge` / `agent` | `ChargeDecisionEngineTests`、`SchemaCompatibilityTests`（`EcTaskRequest_`）+ `pmctl status` |
+| `CHG-03` | 电量每变 5%、插拔电、唤醒及写阈值时追加 `history.log` 与 `ec.log` | `battery-charge` / `agent` | `PowerModeCalculatorTests`（`ShouldTriggerBatteryHistory_`）、`PlatformStorageAndXmlTests`（`RotatingUtcLogger_`）+ 检查日志 |
+| `NTF-01` | 开盖亮屏延后 15 秒查 `wevtapi`，解锁后通过 .NET 原生 WinRT Toast API 发通知 | `agent` | `WakeSummaryFormatterTests`、`PlatformStorageAndXmlTests`（`EventLogReaderInterop_`、`ToastNotifierHelper_`）+ 合盖 >1 分钟开盖实测 |
+| `NFR-01` | 常驻阻塞等待 Win32 事件 + 单一 Waitable Timer；EC 任务去定时化 | `agent` / `battery-charge` | `WakeAlarmPlannerTests`（`ComputeNextAlarm_`）+ 计划任务触发器检查 |
 | `NFR-02` | `ui` 整合模式切换与冲高控制，桌面与开始菜单统一 `PowerManager.lnk` | `ui` / `install.ps1` | 快捷方式与界面操作核验 |
-| `NFR-03` | 前端草稿编辑状态机（`runDraft` / `pick`）显式确认提交，未确认取消或关窗零 IPC | `ui` | 前端交互核验 + [ui-design.md](ui-design.md) |
-| `NFR-04` | 单实例 `Mutex`、DWM 深浅色热同步、`ResizeObserver` 内容贴合与 `window_state` 最大化自适应、`mock.js` 离线预览 | `ui` | [verify_ui_layout.py](../scripts/verify_ui_layout.py) + `--smoke-test` |
+| `NFR-03` | 前端草稿编辑状态机（`runDraft` / `pick`）显式确认提交，未确认取消或关窗零 IPC | `ui` | 前端交互核验（无自动化测试）+ [ui-design.md](ui-design.md) §四 |
+| `NFR-04` | 单实例 `Mutex`、DWM 深浅色热同步、`ResizeObserver` 内容贴合与 `window_state` 最大化自适应、`Esc` / `F5` 快捷键 | `ui` | [verify_ui_layout.py](../scripts/verify_ui_layout.py) + `--smoke-test` |

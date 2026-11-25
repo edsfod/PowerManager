@@ -21,7 +21,7 @@
     <div class="mode-layout">
       <div class="mode-left">
         <div class="tiles" role="radiogroup" aria-label="运行模式">
-          <button type="button" class="tile" id="t-normal" role="radio" aria-checked="false"><b>普通</b><span>合盖 1 分钟后睡</span></button>
+          <button type="button" class="tile" id="t-normal" role="radio" aria-checked="false"><b>普通</b><span>合盖 <span data-policy="lid_sleep_delay_sec"></span>后睡</span></button>
           <button type="button" class="tile" id="t-run" role="radio" aria-checked="false">
             <div class="tile-head"><b>保持运行</b><span class="draft-badge hidden" id="run-draft-badge">待确认</span></div>
             <span>跑实验、通勤：插电不睡，合盖继续跑</span>
@@ -47,14 +47,14 @@
       <div class="runbar-ctrl">
         <span class="faint">时长</span>
         <div class="slider-row">
-          <input type="range" id="r-hours" min="1" max="24" step="1">
+          <input type="range" id="r-hours" step="1">
           <span class="slider-val num" id="v-hours"></span>
         </div>
         <span class="chips" id="hours"></span>
       </div>
     </div>
     <div class="alertbar hidden" id="forced-sleep-bar">
-      主动睡眠已触发：2 分钟内未入睡将自动休眠（开盖活动可中止）
+      主动睡眠已触发：<span data-policy="hibernate_fallback_sec"></span>内未入睡将自动休眠（开盖活动可中止）
     </div>
   </section>
 
@@ -65,7 +65,7 @@
         <div class="read-actions">
           <span class="read-wrap hidden" id="read-wrap">
             <span class="read-badge num" id="read-at"></span>
-            <span class="read-tip">事件触发：插拔电、醒来、电量每变 5%、冲高到点</span>
+            <span class="read-tip">事件触发：插拔电、醒来、电量每变 <span data-policy="history_step_pct"></span>%、冲高到点</span>
           </span>
           <button type="button" class="mini-btn" id="b-refresh-ec" title="按需拉起 EC 任务刷新温度、功耗与阈值读数">刷新读数</button>
         </div>
@@ -94,30 +94,30 @@
     <hr>
 
     <div id="boost-off">
-      <div class="boost-head"><b>临时冲高</b><span class="faint">出门前多充一点，到时自动回到 75%–80%</span></div>
+      <div class="boost-head"><b>临时冲高</b><span class="faint">出门前多充一点，到时自动回到 <span data-policy="charge_start"></span>%–<span data-policy="charge_stop"></span>%</span></div>
       <div class="field">
         <label>充到</label>
         <div class="ctrl">
-          <div class="slider-row"><input type="range" id="r-target" min="85" max="100" step="1"><span class="slider-val num" id="v-target"></span></div>
+          <div class="slider-row"><input type="range" id="r-target" step="1"><span class="slider-val num" id="v-target"></span></div>
           <span class="chips" id="b-target"></span>
         </div>
       </div>
       <div class="field">
         <label>充到后插电保持</label>
         <div class="ctrl">
-          <div class="slider-row"><input type="range" id="r-hold" min="15" max="180" step="5"><span class="slider-val num" id="v-hold"></span></div>
+          <div class="slider-row"><input type="range" id="r-hold" step="5"><span class="slider-val num" id="v-hold"></span></div>
           <span class="chips" id="b-hold"></span>
         </div>
       </div>
       <div class="field">
         <label>最长</label>
         <div class="ctrl">
-          <div class="slider-row"><input type="range" id="r-max" min="1" max="12" step="0.5"><span class="slider-val num" id="v-max"></span></div>
+          <div class="slider-row"><input type="range" id="r-max" step="0.5"><span class="slider-val num" id="v-max"></span></div>
           <span class="chips" id="b-max"></span>
         </div>
       </div>
       <div class="row spread" style="margin-top:.55rem">
-        <span class="faint">拔电出门也会回到 75%–80%</span>
+        <span class="faint">拔电出门也会回到 <span data-policy="charge_start"></span>%–<span data-policy="charge_stop"></span>%</span>
         <button class="btn" id="b-go">开始冲高</button>
       </div>
     </div>

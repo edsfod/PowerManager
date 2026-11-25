@@ -19,4 +19,4 @@
 
 ## 影响
 - 避免当下引入无用抽象与复杂的多机型降级逻辑，聚焦当前设备稳定性。
-- 后续工程规范（[conventions.md](../conventions.md)）重点约束“高内聚与硬件接口隔离”，并要求所有硬件与系统接口具备独立验证脚本。
+- 硬件读写收拢在 `PowerManager.Hardware.MateBook` 一个项目内（只有 `PowerManager.BatteryCharge` 引用它），并要求改动硬件与系统接口前先用独立脚本实机验证（见 [ARCHITECTURE.md](../../ARCHITECTURE.md) §5）。

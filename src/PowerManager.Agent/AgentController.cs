@@ -320,7 +320,7 @@ public sealed class AgentController : IDisposable
             if (EvaluateModeExpiryIfNeeded(nowUtc))
             {
                 _actions.ApplyPowerScheme(_modeState.ParsedMode, _forcedSleep is not null, "keep_running expired");
-                _actions.SendToastSafe("保持运行到期", "已回到普通模式：插电闲置 1 小时睡，用电池 15 分钟睡，合盖 1 分钟睡", tag: "mode");
+                _actions.SendToastSafe("保持运行到期", PolicyText.KeepRunningExpiredToastBody(), tag: "mode");
                 if (SleepGuardEngine.ShouldTriggerNormalLidCloseSleep(AgentMode.Normal, _lidClosed, DisplayAndInputInterop.HasExternalActiveDisplay()))
                 {
                     EnterForcedSleep("保持运行到期且合盖", nowUtc);
@@ -333,7 +333,7 @@ public sealed class AgentController : IDisposable
                 _normalLidSleepDueUtc = null;
                 if (SleepGuardEngine.ShouldTriggerNormalLidCloseSleep(_modeState.ParsedMode, _lidClosed, DisplayAndInputInterop.HasExternalActiveDisplay()))
                 {
-                    EnterForcedSleep("合盖 1 分钟", nowUtc);
+                    EnterForcedSleep($"合盖 {PolicyText.Duration(PowerPolicy.NormalLidCloseSleepDelay)}", nowUtc);
                 }
             }
 
@@ -367,7 +367,7 @@ public sealed class AgentController : IDisposable
                 TimeSpan idle = DisplayAndInputInterop.GetUserIdleDuration();
                 if (SleepGuardEngine.ShouldTakeoverCommuteIdle(_modeState.ParsedMode, _acOnline, idle, _forcedSleep is not null))
                 {
-                    EnterForcedSleep("通勤电池闲置 32 分钟接管", nowUtc);
+                    EnterForcedSleep($"通勤电池闲置 {PolicyText.Duration(PowerPolicy.CommuteIdleTakeoverThreshold)}接管", nowUtc);
                 }
                 else
                 {
@@ -421,8 +421,8 @@ public sealed class AgentController : IDisposable
         }
         else if (tickAction == ForcedSleepTickAction.TriggerHibernate)
         {
-            _log.Warn($"Forced sleep timed out after 2 min (note=\"{_forcedSleep.TriggerNote}\"), invoking Hibernate fallback.");
-            _wakeSummary.AddNote("2 分钟未入睡转休眠");
+            _log.Warn($"Forced sleep timed out after {PowerPolicy.HibernateFallbackDelay.TotalMinutes:0} min (note=\"{_forcedSleep.TriggerNote}\"), invoking Hibernate fallback.");
+            _wakeSummary.AddNote($"{PolicyText.Duration(PowerPolicy.HibernateFallbackDelay)}未入睡转休眠");
             if (!_actions.TryHibernate())
             {
                 _forcedSleep = SleepGuardEngine.ResetAfterHibernateRejected(_forcedSleep, nowUtc);

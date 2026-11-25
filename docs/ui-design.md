@@ -1,15 +1,15 @@
 # 交互界面设计（UI Design）
 
-本文档定义 `PowerManager.UI` 的**信息架构、窗口与响应式行为、异常态引导、交互状态机与验收方式**；外部行为需求见 [requirements.md](requirements.md)（`NFR-02`–`NFR-04`、`SLP-02`、`CHG-02`），进程边界与 10 项 JSON-RPC / IPC 契约见 [design.md](design.md) §四。
+本文档定义 `PowerManager.UI` 的**信息架构、窗口与响应式行为、异常态引导、交互状态机与验收方式**；外部行为需求见 [requirements.md](requirements.md)（`NFR-02`–`NFR-04`、`SLP-02`、`CHG-02`），进程边界与 JSON-RPC / IPC 契约见 [design.md](design.md) §四。
 
 ---
 
 ## 一、 设计原则与前端约束
 
-1. **零构建链与离线预览**：前端由 `src/PowerManager.UI/web/` 下 `index.html`、`styles.css`、`mock.js`、`app.js` 四个静态文件组成，编译时由 `EmbeddedWebAssets.cs` 内嵌进可执行文件；无 WebView2 宿主时自动启用 `mock.js` 离线桥接（其示例文案与 `UiStateFormatter` 保持一致），支持浏览器直接预览。
+1. **零构建链与离线预览（开发约束，非用户需求）**：前端由 `src/PowerManager.UI/web/` 下的 `index.html`、`styles.css`、`mock.js`、`app.js` 静态文件组成，编译时由 `EmbeddedWebAssets.cs` 内嵌进可执行文件；无 WebView2 宿主时自动启用 `mock.js` 离线桥接（其示例文案与 `UiStateFormatter` 保持一致），支持浏览器直接预览。
 2. **字号与主题跟随系统**：页面保持固定基准字号，完全由 Windows DPI 缩放控制清晰度（不在最大化时用 `vh` 拉伸或压缩字体）；组件统一消费 `:root` 中的语义 Design Tokens，宿主同步 Windows 浅/深色标题栏与背景色。
 3. **显式确认与安全放弃**：凡涉及连续参数微调的操作（保持运行时长、临时冲高），先在前端编辑草稿，仅在用户显式点击确认后发 IPC；未确认即取消、切回或关闭窗口严格维持后端原有状态。
-4. **策略同步约定**：前端表单范围（保持运行 `1–24`h / 冲高参数范围）与规则说明文案为静态展示，修改 [PowerPolicy.cs](../src/PowerManager.Core/Policy/PowerPolicy.cs) 策略参数时需同步更新前端对应范围与文案。
+4. **策略数字不在前端手写**：滑条范围、规则说明与提示文案中的策略数字（时长、阈值、温度、百分比）一律取自 `get_state` 下发的 `policy`（来源 [PowerPolicy.cs](../src/PowerManager.Core/Policy/PowerPolicy.cs)，见 `PolicySnapshot`）。措辞留在前端：`app.js` 用模板字符串拼句子，`index.html` 用 `<span data-policy="键名">` 占位，键名以 `_sec` 结尾的按时长格式化（`fmtDur`）。快捷档位属于界面设计，留在 `app.js`，超出 `policy` 范围的档位自动隐藏。`UiPolicyConsistencyTests` 会扫描 `index.html` 与 `app.js` 中手写的“数字 + 单位”，并校验 `mock.js` 的 `policy` 副本与 `PolicySnapshot` 一致。
 
 ---
 

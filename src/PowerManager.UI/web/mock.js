@@ -1,32 +1,47 @@
 /* Standalone browser Mock bridge (used when opened directly without WebView2 host) */
 window.createPowerManagerMockHost = function createPowerManagerMockHost(onRefresh, onToast) {
   const fmtHm = d => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  // 与 PowerManager.Core.Policy.PolicySnapshot 保持一致（由 UiPolicyConsistencyTests 校验，改动须同步）
+  /* policy:begin */
+  const policy = {
+    run_hours_min: 1, run_hours_max: 24, run_hours_default: 12,
+    boost_target_min: 85, boost_target_max: 100, boost_hold_min: 15, boost_hold_max: 180,
+    boost_maxh_min: 1, boost_maxh_max: 12, boost_hysteresis: 5,
+    charge_start: 75, charge_stop: 80,
+    normal_ac_display_sec: 900, normal_ac_sleep_sec: 3600, normal_dc_display_sec: 300, normal_dc_sleep_sec: 900,
+    run_ac_display_sec: 900, run_ac_sleep_sec: 0, run_dc_display_sec: 300, run_dc_sleep_sec: 1800,
+    lid_sleep_delay_sec: 60, hibernate_fallback_sec: 120, commute_temp_c: 40,
+    dc_balanced_min_pct: 50, history_step_pct: 5
+  };
+  /* policy:end */
+  const baseBand = () => [policy.charge_start, policy.charge_stop];
   const state = {
     agent: true,
     dry_run: false,
     forced_sleep: false,
     rules_expanded: false,
     data_dir: 'C:\\Users\\Demo\\AppData\\Local\\PowerManager',
-    mode: { mode: 'normal', hours: 12, until: null, left: null, run_until_utc: null },
+    mode: { mode: 'normal', hours: policy.run_hours_default, until: null, left: null, run_until_utc: null },
     power_mode: { ac: '最佳性能', dc: '平衡' },
     battery: {
       pct: 78, ac: true, flow: '接通电源 · 已到 80%，不再充',
-      band: [75, 80], hw: [75, 80],
+      band: baseBand(), hw: baseBand(),
       temp: 29.4, system_w: 18, charge_ma: 0, hottest: 44,
       read_at: fmtHm(new Date()), read_age_min: 2, slow: false,
       last: '上次冲高已回落：充到 95% 后插电保持满 60 分钟'
     },
     boost: { active: false },
-    boost_prefs: { target: 95, hold: 60, maxh: 4 }
+    boost_prefs: { target: 95, hold: 60, maxh: 4 },
+    policy
   };
 
   function applyPreset(name) {
     state.agent = true;
     state.forced_sleep = false;
     state.boost = { active: false };
-    state.mode = { mode: 'normal', hours: 12, until: null, left: null, run_until_utc: null };
-    state.battery.band = [75, 80];
-    state.battery.hw = [75, 80];
+    state.mode = { mode: 'normal', hours: policy.run_hours_default, until: null, left: null, run_until_utc: null };
+    state.battery.band = baseBand();
+    state.battery.hw = baseBand();
     state.battery.ac = true;
     state.battery.pct = 78;
     state.battery.read_age_min = 2;
@@ -37,8 +52,8 @@ window.createPowerManagerMockHost = function createPowerManagerMockHost(onRefres
     } else if (name === 'boost') {
       const end = new Date(Date.now() + 4 * 3600 * 1000);
       state.battery.pct = 88;
-      state.battery.band = [90, 95];
-      state.battery.hw = [90, 95];
+      state.battery.band = [95 - policy.boost_hysteresis, 95];
+      state.battery.hw = [95 - policy.boost_hysteresis, 95];
       state.battery.charge_ma = 2400;
       state.battery.flow = '接通电源 · 正在充电 36.5 W';
       state.boost = { active: true, target: 95, hold: 60, held: null, full_since_utc: null, deadline: fmtHm(end) };
@@ -114,7 +129,7 @@ window.createPowerManagerMockHost = function createPowerManagerMockHost(onRefres
           return JSON.parse(JSON.stringify(state));
         case 'set_mode': {
           const mode = params.mode || 'normal';
-          const hours = params.hours != null ? Number(params.hours) : 12;
+          const hours = params.hours != null ? Number(params.hours) : policy.run_hours_default;
           if (mode === 'run') {
             if (hours === 0) {
               state.mode = { mode: 'run', hours: 0, until: null, left: null, run_until_utc: null };
@@ -133,8 +148,8 @@ window.createPowerManagerMockHost = function createPowerManagerMockHost(onRefres
           const maxh = Number(params.maxh || 4);
           const end = new Date(Date.now() + maxh * 3600 * 1000);
           state.boost_prefs = { target, hold, maxh };
-          state.battery.band = [target - 5, target];
-          state.battery.hw = [target - 5, target];
+          state.battery.band = [target - policy.boost_hysteresis, target];
+          state.battery.hw = [target - policy.boost_hysteresis, target];
           state.boost = { active: true, target, hold, held: null, full_since_utc: null, deadline: fmtHm(end) };
           return { ok: true, msg: `Mock：已开始冲高到 ${target}%` };
         }

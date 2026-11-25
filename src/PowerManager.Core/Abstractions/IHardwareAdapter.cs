@@ -3,7 +3,7 @@ using PowerManager.Core.Models;
 namespace PowerManager.Core.Abstractions;
 
 /// <summary>
-/// 底层硬件适配抽象接口（遵循 ADR-0001 与 conventions.md §一.1，上层不感知具体 WMI/EC 字节）。
+/// 底层硬件适配抽象接口（遵循 ADR-0001：上层不感知具体 WMI/EC 字节）。
 /// </summary>
 public interface IChargeHardwareAdapter
 {
