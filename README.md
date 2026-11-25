@@ -57,6 +57,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | 顶层代码地图、项目依赖不变量、跨进程主链路与按任务最小阅读清单（改代码前首选入口） |
 | [docs/requirements.md](docs/requirements.md) | 外部可验收的功能与非功能需求（`SLP-*` / `PWR-*` / `CHG-*` / `NTF-*` / `NFR-*`） |
 | [docs/design.md](docs/design.md) | 系统架构分层、模块契约、状态持久化与需求追踪矩阵 |
 | [docs/conventions.md](docs/conventions.md) | 高内聚边界、去硬编码、接口验证与文档归类规范 |
