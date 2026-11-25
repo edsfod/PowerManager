@@ -42,6 +42,9 @@ $projects = @(
 
 Write-Output "Publishing PowerManager-v2 ($Configuration, $Runtime, framework-dependent) -> $OutputDir"
 
+# Do not leave MSBuild worker nodes or the shared C# compiler server (VBCSCompiler) running after
+# publish: they idle for 10+ minutes and keep callers that wait on the process tree blocked.
+# Scoped to this publish only, unlike 'dotnet build-server shutdown' which stops every build server.
 foreach ($proj in $projects) {
     $fullProj = Join-Path $repoRoot $proj
     Write-Output "  -> dotnet publish $proj"
@@ -52,6 +55,8 @@ foreach ($proj in $projects) {
         -o $OutputDir `
         /p:DebugType=None `
         /p:DebugSymbols=false `
+        /nodeReuse:false `
+        /p:UseSharedCompilation=false `
         --nologo
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet publish failed for $proj (exit code $LASTEXITCODE)"

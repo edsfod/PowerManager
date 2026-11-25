@@ -4,6 +4,9 @@
 
 ---
 
+## v2.2.1 — 2026-11-25（发布脚本不再残留后台编译进程）
+- **发布脚本**：`scripts/publish.ps1` 调用 `dotnet publish` 时加上 `/nodeReuse:false` 与 `/p:UseSharedCompilation=false`，发布结束后不再留下空闲十几分钟的 MSBuild 节点与 `VBCSCompiler` 进程；只作用于本次发布，不影响同一用户其他正在进行的编译。
+
 ## v2.2.0 — 2026-11-25（策略数字单一来源、文档与代码对齐、红线并入 ARCHITECTURE）
 - **界面文案与通知的策略数字统一取自 `PowerPolicy`**：`get_state` 新增 `policy` 字段（`PolicySnapshot`），前端滑条范围、规则说明与提示文案中的数字都由它填入，不再手写；保持运行到期通知和主动睡眠备注改用 `PolicyText` 拼写；删除 `PowerPolicy` 中没有被使用的 4 组界面快捷档位常量（档位由前端 `app.js` 定义，超出范围自动隐藏）；新增 `UiPolicyConsistencyTests` 扫描前端手写的“数字 + 单位”，并校验 `mock.js` 的 `policy` 副本。
 - **文档与代码对齐**：修正 [docs/design.md](docs/design.md) 中 `BatteryCharge` 的依赖描述、`pmctl` 权限描述与“界面/pmctl 不修改系统设置”的例外；明确 `restore-original` 只让常驻退出、不禁用计划任务；追踪矩阵改为同步 Named Pipe 描述并以 `pmctl status` 取代 v1 的 `--status`；[ADR-0003](docs/adr/0003-rejection-of-adaptive-charge.md) 补齐“未达标拔电满 10 分钟”回落条件。
