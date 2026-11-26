@@ -4,6 +4,16 @@
 
 ---
 
+## v2.3.0 — 2026-11-26（文档体系重构：只写当前状态，意图 / 决策 / 实现分层）
+- **需求文档重写**：新增目标（`G1`–`G3`）、范围与使用场景（`S1`–`S3`）；每条需求改为一个小节，写明服务的目标或场景、规格、逐条验收条件与相关 ADR。需求编号不变；`NFR-01`（事件驱动）属于设计约束，废弃并移入 ARCHITECTURE 不变量 `A4`。
+- **ARCHITECTURE 重写**：全局概览（权限边界与进程结构）、按模块的代码地图、不变量（架构不变量 `A1`–`A6`，安全约束 `C1`–`C5` 取代红线 `R1`–`R6`，原 `R6` 由需求 `SLP-09` 承载）、横切关注点（含测试分层）与跨模块改动清单；删除按任务阅读清单与文档约定。
+- **design 收窄为机制与接口契约**：删除与 ARCHITECTURE 重复的架构分层、重抄的需求数值、可测试性一节与需求追踪矩阵；新增计划任务设置表；改正 `Kernel-Power` 42 的用途描述（随查询读取，摘要不使用）。
+- **ADR 统一为“背景 / 决策 / 备选方案 / 影响”**，只描述当前决策：去掉状态与日期字段，被否决的方案及依据写进“备选方案”；`0004-event-driven-migration.md` 改名为 `0004-event-driven-scheduling.md`。
+- **README 只面向用户**：新增 Release 压缩包安装方式；具体时长改为引用需求编号；测试与校验脚本移到 ARCHITECTURE。
+- **校验脚本**：`verify_doc_traceability.py` 替换为 `verify_doc_references.py`，检查需求编号、ADR 编号与 Markdown 相对链接都存在。
+- **其他**：`porting-guide.md` 移到 `docs/guides/`；各文档开头加注释，说明装什么、不装什么；代码注释中引用的文档节号改为节名。
+- **隐私**：排查记录移出仓库；本地过程材料统一放在 `docs/notes/`（不入库）。
+
 ## v2.2.1 — 2026-11-25（发布脚本不再残留后台编译进程）
 - **发布脚本**：`scripts/publish.ps1` 调用 `dotnet publish` 时加上 `/nodeReuse:false` 与 `/p:UseSharedCompilation=false`，发布结束后不再留下空闲十几分钟的 MSBuild 节点与 `VBCSCompiler` 进程；只作用于本次发布，不影响同一用户其他正在进行的编译。
 
@@ -15,7 +25,7 @@
 - **README 重排**：按“快速开始 → 用法 → 升级/暂停/卸载 → 常见问题”组织，补充 `pmctl paths`。
 - **发布脚本**：`scripts/publish.ps1` 在 `dist/` 中有 PowerManager 进程运行时提前报错并给出停止命令，不再删到一半失败。
 - **删除 `docs/conventions.md`**：其中多数条目与需求、ADR、参考文档重复或属于通用常识。仍有效的部分并入 [ARCHITECTURE.md](ARCHITECTURE.md)：§1 改为带编号的红线 `R1`–`R6`（EC 只写 `03 10`、写后读回校验、不唤醒也不阻止睡眠、提权任务白名单校验、先存原始设置快照、不改关机语义），原有 4 条“不变量”删除；§5 新增工程与文档约定（实机验证、UTC、防文档漂移、隐私）。回滚的几条例外移到 [docs/design.md](docs/design.md) §五。
-- **隐私**：`docs/investigations/` 改为仅本地保存（`.gitignore`），不再入库。
+- **隐私**：`docs/investigations/` 列入 `.gitignore`（已被跟踪的排查记录在本版本中仍留在仓库里，v2.3.0 才移出）。
 
 ## v2.1.2 — 2026-11-25（边界缺陷修复、UI 交互与指标分组优化、UI 文档合并）
 - **核心与交互缺陷修复**：
@@ -51,7 +61,7 @@
 ## 2026-11-24（文档体系与验证基线重构）
 - **独立重构目录**：在新开发目录 `PowerManager-v2`（即现在的本仓库）中重建清晰的正交文档体系，彻底剥离需求、设计、决策、参考事实与排查历史。
 - **区分无时间性与有时间性资料**：将长期有效的硬件/平台事实收拢至 `docs/reference/`（[wmi-ec-interface.md](docs/reference/wmi-ec-interface.md)、[windows-standby-and-toast.md](docs/reference/windows-standby-and-toast.md)）；将带日期的故障案卷归入 `docs/investigations/`（后改为仅本地保存、不入库）。
-- **建立决策与规范体系**：沉淀 5 份架构决策记录（`docs/adr/0001`–`0005`，含 C# .NET 10 技术栈选型）、工程与文档边界规范（`docs/conventions.md`，后已删除并入 `ARCHITECTURE.md`）及新机型移植指南（[docs/porting-guide.md](docs/porting-guide.md)）。
+- **建立决策与规范体系**：沉淀 5 份架构决策记录（`docs/adr/0001`–`0005`，含 C# .NET 10 技术栈选型）、工程与文档边界规范（`docs/conventions.md`，后已删除并入 `ARCHITECTURE.md`）及新机型移植指南（[docs/porting-guide.md](docs/guides/porting-guide.md)）。
 - **需求追踪与独立验证脚本**：将需求改为按域前缀编号（`SLP-*` / `PWR-*` / `CHG-*` / `NTF-*` / `NFR-*`），在 [docs/design.md](docs/design.md) 建立需求追踪矩阵，并新增 `scripts/verify_power_boundaries.py`、`scripts/verify_wmi_readonly.py` 与 `scripts/verify_doc_traceability.py`。
 
 ## 2026-11-22（事件驱动重写与独立成库）

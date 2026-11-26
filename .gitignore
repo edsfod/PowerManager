@@ -7,5 +7,5 @@ dist/
 __pycache__/
 *.pyc
 
-# 本地排查案卷（含个人使用信息，不公开）
-docs/investigations/
+# 本地过程材料：灵感、排查记录（含个人使用信息，不公开）
+docs/notes/

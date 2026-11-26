@@ -1,7 +1,7 @@
 namespace PowerManager.Core.Policy;
 
 /// <summary>
-/// 集中只读策略常量表：用户可感知的策略数值只在此定义（ARCHITECTURE.md §5）。
+/// 集中只读策略常量表：用户可感知的策略数值只在此定义（ARCHITECTURE.md 不变量 A6）。
 /// 日常充电基准阈值 75%–80% 受 ADR-0003 防遗忘约束保护，仅在此定义，不暴露外部可编辑配置。
 /// </summary>
 public static class PowerPolicy

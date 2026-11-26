@@ -62,7 +62,7 @@ public static class SleepGuardEngine
     }
 
     /// <summary>
-    /// SetSuspendState(Hibernate) 被系统拒绝时重置计时于下一轮重试（docs/design.md §二.2）。
+    /// SetSuspendState(Hibernate) 被系统拒绝时重置计时于下一轮重试（docs/design.md“主动睡眠与休眠兜底”）。
     /// </summary>
     public static ForcedSleepState ResetAfterHibernateRejected(
         ForcedSleepState state,

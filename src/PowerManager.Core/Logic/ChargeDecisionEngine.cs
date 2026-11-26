@@ -61,7 +61,7 @@ public static class ChargeDecisionEngine
                 Reason: $"Daily baseline {PowerPolicy.DefaultChargeStartPercent}%-{PowerPolicy.DefaultChargeStopPercent}%");
         }
 
-        // reached_target 一旦达标即不可逆（docs/design.md §三）
+        // reached_target 一旦达标即不可逆（docs/design.md“充电控制”）
         bool reachedTarget = currentBoost.ReachedTarget || batteryPercent >= currentBoost.TargetStop;
 
         // full_since 为连续达标插电计时：插电期间跌破目标或拔电即清零重计

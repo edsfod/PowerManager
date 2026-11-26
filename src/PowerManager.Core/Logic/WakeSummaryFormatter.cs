@@ -48,7 +48,7 @@ public sealed record WakeSummaryResult(
     string Body);
 
 /// <summary>
-/// 醒来事件日志解析与 Toast 摘要拼装纯函数（NTF-01 / docs/design.md §二.3）。
+/// 醒来事件日志解析与 Toast 摘要拼装纯函数（NTF-01 / docs/design.md“醒来通知”）。
 /// </summary>
 public static class WakeSummaryFormatter
 {

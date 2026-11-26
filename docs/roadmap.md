@@ -1,3 +1,7 @@
+<!--
+类别：意图状态（远期）。装：未排期的方向与落地前提。不是承诺；决定要做时转为 requirements.md 中的需求。
+-->
+
 # 未来拓展方向（Roadmap）
 
 本文档仅记录**未排期的远期演进方向与前置演进条件**，不构成当前版本的验收需求（当前生效需求见 [requirements.md](requirements.md)，当前生效设计见 [design.md](design.md)）。
@@ -14,20 +18,20 @@
 ## 二、 自适应睡眠、温控与电源模式调度
 
 - **方向描述**：基于历史使用时段、负载特征与温度变化率，探索自适应的电源模式切换或散热预警策略（可结合统计模型或轻量神经网络）。
-- **边界约束**：不触碰 [ADR-0003](adr/0003-rejection-of-adaptive-charge.md) 已明确否决的自适应充电电流控制，亦不破坏 [requirements.md](requirements.md) 中“手动切换普通/保持运行模式”的显式可控原则（若引入自适应能力，须作为独立可选策略并先经过离线日志回放验证）。
+- **边界约束**：不触碰 [ADR-0003](adr/0003-rejection-of-adaptive-charge.md) 已明确否决的自适应充电电流控制，亦不破坏 “手动切换普通/保持运行模式”的显式可控原则（`SLP-01`）（若引入自适应能力，须作为独立可选策略并先经过离线日志回放验证）。
 
 ---
 
 ## 三、 电池健康度与充放电历史统计
 
 - **方向描述**：基于 `history.log` 与 `BatteryFullChargedCapacity` 的长期记录，在 UI 或 `pmctl` 中提供离线电池满充容量衰减曲线、每日充放电循环统计与异常耗电摘要。
-- **架构前置条件**：保持只读离线分析，不增加后台轮询开销（符合 `NFR-01`）。
+- **架构前置条件**：保持只读离线分析，不增加后台轮询开销（符合 [ARCHITECTURE.md](../ARCHITECTURE.md) 不变量 `A4`）。
 
 ---
 
 ## 四、 新 Windows 机型硬件适配器接入
 
-- **方向描述**：未来更换其他 Windows 11 笔记本时，按 [porting-guide.md](porting-guide.md) 的 5 步硬件移植流程新增独立的 `PowerManager.Hardware.<Model>` 适配器实现，复用 `Core`、`Platform`、`Agent`、`UI` 与 `pmctl`。
+- **方向描述**：未来更换其他 Windows 11 笔记本时，按 [porting-guide.md](guides/porting-guide.md) 的硬件移植流程新增独立的 `PowerManager.Hardware.<Model>` 适配器实现，复用 `Core`、`Platform`、`Agent`、`UI` 与 `pmctl`。
 
 ---
 
@@ -41,4 +45,4 @@
 ## 六、 独立可复用的桌面 UI 壳与设计原子模板
 
 - **方向描述**：将当前 `PowerManager.UI` 中与电源业务无关的通用桌面基础设施——WinForms + WebView2 宿主、DWM 深浅色标题栏同步、单实例 `Mutex` 激活、DPI 自适应窗口缩放动画、JSON-RPC 桥接层与 Fluent Design Tokens——抽离为独立可复用的项目模板或共享库，供其他 Windows 轻量工具直接复用。
-- **架构前置条件**：保持当前单页前端与宿主之间的 JSON-RPC 契约（见 [design.md](design.md) §四）稳定，抽离后 PowerManager 仅提供业务后端服务与业务页面，不破坏零 Node 构建链的轻量约束。
+- **架构前置条件**：保持当前单页前端与宿主之间的 JSON-RPC 契约（见 [design.md](design.md) 的“接口契约”）稳定，抽离后 PowerManager 仅提供业务后端服务与业务页面，不破坏零 Node 构建链的轻量约束。

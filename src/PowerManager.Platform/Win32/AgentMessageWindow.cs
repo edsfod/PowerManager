@@ -19,7 +19,7 @@ public enum PowerSystemEventKind
 
 /// <summary>
 /// 隐藏顶级 Win32 窗口消息循环：监听合盖、屏幕、插拔电、电量每变 1% 与会话锁屏/解锁；
-/// 遵循 docs/design.md §二.1，不监听 PBT_APMSUSPEND / PBT_APMRESUMEAUTOMATIC。
+/// 遵循 docs/design.md“事件来源”，不监听 PBT_APMSUSPEND / PBT_APMRESUMEAUTOMATIC。
 /// </summary>
 public sealed class AgentMessageWindow : IDisposable
 {

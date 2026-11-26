@@ -44,7 +44,7 @@ public static class WakeAlarmPlanner
     }
 
     /// <summary>
-    /// 现代待机下通过 Waitable Timer 触发时刻晚于目标墙上时间严格 &gt; 30 秒判定刚经历冻结/睡眠（docs/design.md §二.1）。
+    /// 现代待机下通过 Waitable Timer 触发时刻晚于目标墙上时间严格 &gt; 30 秒判定刚经历冻结/睡眠（docs/design.md“单一定时器”）。
     /// </summary>
     public static bool IsTimerFrozen(DateTimeOffset scheduledTargetUtc, DateTimeOffset actualFiredUtc) =>
         (actualFiredUtc - scheduledTargetUtc) > PowerPolicy.TimerFrozenDriftThreshold;

@@ -93,7 +93,7 @@ internal sealed class WakeSummaryCoordinator
             return;
         }
 
-        // 后台线程延迟 15 秒查询 wevtapi（docs/design.md §二.3）
+        // 后台线程延迟 15 秒查询 wevtapi（docs/design.md“醒来通知”）
         _ = Task.Run(async () =>
         {
             try

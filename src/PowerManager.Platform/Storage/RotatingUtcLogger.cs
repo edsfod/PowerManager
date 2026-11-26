@@ -4,7 +4,7 @@ using PowerManager.Core.Policy;
 namespace PowerManager.Platform.Storage;
 
 /// <summary>
-/// 线程安全 UTC ISO 8601 追加日志，超过 1 MB 自动轮换为 .1（docs/design.md §五）。
+/// 线程安全 UTC ISO 8601 追加日志，超过 1 MB 自动轮换为 .1（docs/design.md“持久化”）。
 /// </summary>
 public sealed class RotatingUtcLogger(string logPath, long maxBytes = PowerPolicy.MaxLogFileBytes)
 {

@@ -1,23 +1,30 @@
-# ADR-0005: 选用 C#（.NET 10 SDK + Framework-Dependent）作为重写技术栈
+<!--
+类别：决策状态。决策被推翻时原地改写本文，被推翻的方案及原因写进"备选方案"。
+-->
 
-- **状态**：Accepted
-- **日期**：2026-11-24
+# ADR-0005: 用 C#（.NET 10），以 Framework-Dependent 方式发布
 
 ## 背景
-在完成文档与接口验证基线重构后，需要为 `PowerManager-v2` 选定代码实现语言与分发构建方式。本机已有环境约束如下：
-- 系统已预装 `.NET 8 / 9 / 10` 运行时与 `WindowsDesktop` 运行时；
-- 原生 C/C++ 工具链采用轻量级 MSYS2 UCRT64，未安装数 GB 的 MSVC / Visual Studio Build Tools；
-- 核心业务重度依赖 Windows 专有接口（`root\wmi:OemWMIMethod`、Win32 消息循环、`powrprof.dll`、`wevtapi`、WinRT Toast 与 WebView2）。
+
+驱动力：
+
+- 核心功能重度依赖 Windows 专有接口：`root\wmi:OemWMIMethod`、Win32 消息循环、`powrprof.dll`、`wevtapi`、WinRT Toast、WebView2。
+- 目标机器已装有 .NET 10 运行时与 WindowsDesktop 运行时。
+- 开发机的原生工具链是 MSYS2 UCRT64，没有安装 MSVC / Visual Studio Build Tools（数 GB）。
 
 ## 决策
-选用 **C#（.NET 10 SDK）** 重写主程序，采用 **Framework-Dependent（可开启 ReadyToRun）** 方式发布，不启用 Native AOT（`PublishAot=true`），不改用 Rust。
 
-## 依据
-1. **Windows 生态契约平滑**：C# 对 WMI（`System.Management` / COM）、Win32 P/Invoke、WinRT Toast 与 `Microsoft.Web.WebView2` 均为第一方原生支持；相比 Python 可获得编译期静态类型检查与更低的运行时开销。
-2. **避免引入庞大的 MSVC 构建链**：Native AOT 在 Windows 上硬性依赖 MSVC `link.exe` 与 Windows SDK，无法复用本机已有的 MSYS2 UCRT64；而本机已装有 `.NET 10` 运行时，Framework-Dependent 模式仅需安装约 200 MB 的 `.NET 10 SDK`，且无裁剪（Trimming）限制。
-3. **优于 Rust 的工程性价比**：Rust 在调用 WMI `ExecMethod`（`VARIANT` / `SAFEARRAY`）及 WebView2 回调时需编写大量 `unsafe` 代码，且 `x86_64-pc-windows-gnu` 目标在部分 Windows 生态库上存在链接兼容风险；换取的仅约 20 MB 常驻内存差异在实际使用中无感知价值。
+主程序用 **C#（.NET 10 SDK）** 编写，以 **Framework-Dependent** 方式发布（可开启 ReadyToRun）；不启用 Native AOT，不用 Rust。
+
+## 备选方案
+
+1. **Python**（v1 的实现语言）：没有编译期类型检查，运行时开销更高；C# 对上述 Windows 接口都有第一方支持。
+2. **Native AOT**：在 Windows 上硬性依赖 MSVC `link.exe` 与 Windows SDK，不能复用 MSYS2 工具链；Framework-Dependent 只需约 200 MB 的 .NET 10 SDK，也没有裁剪限制。
+3. **Rust**：调用 WMI `ExecMethod`（`VARIANT` / `SAFEARRAY`）与 WebView2 回调需要大量 `unsafe` 代码；`x86_64-pc-windows-gnu` 目标与部分 Windows 生态库存在链接兼容风险；换来的约 20 MB 常驻内存差异在使用中感知不到。
+4. **Self-Contained 发布**：目标机已有运行时，自带运行时只增加体积。
 
 ## 影响
-- 新增独立 `.NET 10` 开发工具链，与既有 MSYS2 原生工具链互不依赖。
-- 后续部署包依赖目标机器已安装的 `.NET 10 Desktop Runtime`（本机已具备）。
-- 若未来确需在无 `.NET` 运行时的全新 Windows 机器上单文件免环境运行，只需补装 MSVC Build Tools 并调整工程配置即可切换至 Native AOT 或自包含（Self-Contained）发布，无需重写业务逻辑。
+
+- .NET 工具链与 MSYS2 原生工具链互不依赖。
+- 部署依赖目标机已安装 .NET 10 Desktop Runtime。
+- 若将来要在没有 .NET 运行时的机器上免安装运行，补装 MSVC Build Tools 并调整工程配置，即可改为 Native AOT 或 Self-Contained 发布，不需要重写业务逻辑。

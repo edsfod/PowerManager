@@ -1,3 +1,8 @@
+<!--
+类别：外部事实（本机硬件与 Windows 的客观行为）。装：实测或文档可查的事实与验证方法、尚未查明的项。
+不装：本项目怎么用这些事实（→ design.md）、为什么这样用（→ adr/）。
+-->
+
 # MateBook 14 2024 电池充电 WMI 接口与 EC 特性参考
 
 - **适用硬件**：MateBook 14 2024（`FLMH-XX`），基于 BIOS 1.17（2025-04-22）ACPI 表 `SSDT`（OEM Table ID: `WmiTable`，OEM Revision: `0x00001000`）验证
