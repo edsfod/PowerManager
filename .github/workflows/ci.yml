@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: ['**']   # 只在推分支时运行；推 tag 不再重复跑同一提交
   pull_request:
 
 permissions:

@@ -5,7 +5,7 @@
 ---
 
 ## v2.3.2 — 2026-11-26（新增 CI）
-- **GitHub Actions**：新增 `.github/workflows/ci.yml`，每次推送与 PR 在 `windows-latest` 上运行 `verify_doc_references.py` 与 `dotnet test`。
+- **GitHub Actions**：新增 `.github/workflows/ci.yml`，每次推送分支与 PR 在 `windows-latest` 上运行 `verify_doc_references.py` 与 `dotnet test`（推 tag 不触发）。
 
 ## v2.3.1 — 2026-11-26（需求与设计文档的策略数值纳入测试）
 - **新增 `DocPolicyConsistencyTests`**：由 `PowerPolicy` 拼出 [docs/requirements.md](docs/requirements.md) 各规格与 [docs/design.md](docs/design.md) 实现参数应有的原文并逐条核对；去掉这些原文与登记的例外（硬件行为、示例文本、计划任务设置）后，文档中不得再出现“数字 + 单位”。不变量 `A6` 扩展到文档。
