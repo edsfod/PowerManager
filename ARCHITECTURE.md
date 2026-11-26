@@ -124,6 +124,7 @@ WinForms + WebView2 界面。`MainForm` 是窗口宿主，`WebRpcBridge` 路由�
   - 硬件与系统边界：`verify_wmi_readonly.py`、`verify_power_boundaries.py`（实机）；
   - 界面布局：`verify_ui_layout.py`，加 `PowerManager.UI.exe --dry-run --smoke-test` 与目视检查；
   - 文档引用：`verify_doc_references.py`。
+- **CI**：每次推送与 PR 在 `windows-latest` 上运行 `verify_doc_references.py` 与 `dotnet test`（`.github/workflows/ci.yml`）；实机脚本与界面检查不在 CI 中。
 
 ### 跨模块改动清单
 

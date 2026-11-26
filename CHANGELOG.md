@@ -4,6 +4,9 @@
 
 ---
 
+## v2.3.2 — 2026-11-26（新增 CI）
+- **GitHub Actions**：新增 `.github/workflows/ci.yml`，每次推送与 PR 在 `windows-latest` 上运行 `verify_doc_references.py` 与 `dotnet test`。
+
 ## v2.3.1 — 2026-11-26（需求与设计文档的策略数值纳入测试）
 - **新增 `DocPolicyConsistencyTests`**：由 `PowerPolicy` 拼出 [docs/requirements.md](docs/requirements.md) 各规格与 [docs/design.md](docs/design.md) 实现参数应有的原文并逐条核对；去掉这些原文与登记的例外（硬件行为、示例文本、计划任务设置）后，文档中不得再出现“数字 + 单位”。不变量 `A6` 扩展到文档。
 - **改正 `SLP-11` 的描述**：合盖时意外醒来后立即再次尝试睡眠，2 分钟后仍未睡下才休眠（原文写成 2 分钟后才再次尝试睡眠）；design.md 的主动睡眠情形表同步改正，`SLP-10` 的主动睡眠情形补上 `SLP-11`。
