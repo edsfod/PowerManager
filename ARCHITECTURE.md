@@ -99,7 +99,7 @@ WinForms + WebView2 界面。`MainForm` 是窗口宿主，`WebRpcBridge` 路由�
 | `A3` | 普通权限进程不直接读写 EC，只通过请求文件 + 触发计划任务与 `BatteryCharge` 交互 | 绕过提权边界与白名单校验 | `A2` + `ScheduledTaskTrigger` |
 | `A4` | 事件驱动：`Agent` 不做全局周期轮询，所有未来时间点由同一个不唤醒电脑的定时器驱动；只有通勤期间的电池温度按需低频采样 | 无效唤醒与常驻开销（[ADR-0004](docs/adr/0004-event-driven-scheduling.md)） | `AgentAlarmScheduler`、`WaitableTimerHandle` |
 | `A5` | Windows 电源设置正常情况下只由 `Agent` 修改；唯一例外是 `Agent` 未运行时 `pmctl restore-original` 直接恢复 | 多方写入互相覆盖 | `PowerSchemeInterop` 的调用方仅为 `AgentSystemActions` 与 `Cli` 的恢复分支 |
-| `A6` | 用户可感知的策略数值只在 `PowerPolicy` 定义；界面经 `get_state` 的 `policy` 取值，通知经 `PolicyText` 拼写，都不手写数字 | 界面、通知与实际行为不一致 | `UiPolicyConsistencyTests` |
+| `A6` | 用户可感知的策略数值只在 `PowerPolicy` 定义；界面经 `get_state` 的 `policy` 取值，通知经 `PolicyText` 拼写，都不手写数字；需求与设计文档中的数值与它一致 | 界面、通知、文档与实际行为不一致 | `UiPolicyConsistencyTests`、`DocPolicyConsistencyTests` |
 
 **安全约束**（违反会伤电池、让电脑在包里发热，或丢失用户原有设置；确需突破须先改写对应 ADR）：
 
@@ -129,7 +129,7 @@ WinForms + WebView2 界面。`MainForm` 是窗口宿主，`WebRpcBridge` 路由�
 
 | 改动 | 需要同时修改 | 检查 |
 |---|---|---|
-| 改策略数值 | `PowerPolicy`；[requirements.md](docs/requirements.md) 中对应规格；界面要展示的，加进 `PolicySnapshot` 与 `web/mock.js` 的 `policy` 块 | `dotnet test`（`UiPolicyConsistencyTests`） |
+| 改策略数值 | `PowerPolicy`；[requirements.md](docs/requirements.md) 中对应规格；界面要展示的，加进 `PolicySnapshot` 与 `web/mock.js` 的 `policy` 块 | `dotnet test`（`UiPolicyConsistencyTests`、`DocPolicyConsistencyTests`） |
 | 改 IPC 或状态文件字段 | `Contracts/IpcContracts.cs` / `Models/` / `UiModels`；[design.md](docs/design.md) 的契约表 | `dotnet test`（`SchemaCompatibilityTests`、`AgentNamedPipeIntegrationTests`） |
 | 新增 WMI 指令 | 先写实机只读验证 → [wmi-ec-interface.md](docs/reference/wmi-ec-interface.md) → `MateBookWmiCodec`；复核 `C1` | `verify_wmi_readonly.py` + `dotnet test` |
 | 增删需求 | [requirements.md](docs/requirements.md)；代码注释与 design.md 中的需求编号；废弃编号写进"已废弃编号" | `verify_doc_references.py` |
